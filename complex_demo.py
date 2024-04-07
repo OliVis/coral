@@ -6,6 +6,9 @@ import coral
 #                            MODEL CREATION
 # =============================================================================
 
+# Radius used for generating random complex numbers
+COMPLEX_RADIUS = 20
+
 # Convert function into a TensorFlow graph
 @tf.function
 def func(a, b):
@@ -21,8 +24,8 @@ concrete_func = func.get_concrete_function(
 def representative_dataset():
     for _ in range(500):
         #  Input tensors with each a complex number in matrix form
-        a = np.array([coral.complex_to_matrix(coral.random_complex(5))], dtype=np.float32)
-        b = np.array([coral.complex_to_matrix(coral.random_complex(5))], dtype=np.float32)
+        a = np.array([coral.complex_to_matrix(coral.random_complex(COMPLEX_RADIUS))], dtype=np.float32)
+        b = np.array([coral.complex_to_matrix(coral.random_complex(COMPLEX_RADIUS))], dtype=np.float32)
         yield [a, b]
 
 # Convert the TensorFlow model to TensorFlow Lite and compile for Coral Edge TPU
@@ -32,15 +35,15 @@ coral.create_model("model.tflite", concrete_func, representative_dataset)
 #                            MODEL INVOCATION
 # =============================================================================
 
-# A constant for the number of complex samples
+# Number of complex samples
 NUM_SAMPLES = 10
 
 # Initialize Interpreter with the TensorFlow Lite model and input size
 interpreter = coral.EdgeTPUInterpreter("model_edgetpu.tflite", [NUM_SAMPLES,2,2])
 
 # Generate random complex numbers
-complex_a = coral.random_complex(5, NUM_SAMPLES).astype(np.complex64)
-complex_b = coral.random_complex(5, NUM_SAMPLES).astype(np.complex64)
+complex_a = coral.random_complex(COMPLEX_RADIUS, NUM_SAMPLES).astype(np.complex64)
+complex_b = coral.random_complex(COMPLEX_RADIUS, NUM_SAMPLES).astype(np.complex64)
 
 # Prepare inputs for the interpreter by converting complex numbers to matrices
 interpreter.inputs[0] = np.array([coral.complex_to_matrix(n) for n in complex_a])
