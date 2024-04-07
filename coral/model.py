@@ -1,7 +1,7 @@
 import tensorflow as tf
 import subprocess
 
-def convert_and_compile(model_name: str, concrete_function, representative_dataset) -> None:
+def create_model(model_name: str, concrete_function, representative_dataset) -> None:
     """
     Converts a TensorFlow model to a TensorFlow Lite model with quantization optimized for the Coral Edge TPU,
     and then compiles the TensorFlow Lite model for use with the Coral device.

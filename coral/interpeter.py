@@ -1,7 +1,7 @@
 from pycoral.utils import edgetpu
 import numpy as np
 
-class CoralInterpreter:
+class EdgeTPUInterpreter:
     """
     Facilitates TensorFlow Lite model inference on Coral Edge TPU devices,
     handling the entire inference cycle including input quantization, model execution,
@@ -10,7 +10,7 @@ class CoralInterpreter:
 
     def __init__(self, model_name: str, input_size: list[int]) -> None:
         """
-        Initializes a CoralInterpreter instance with the specified Edge TPU model.
+        Initializes a EdgeTPUInterpreter instance with the specified Edge TPU model.
 
         Args:
             model_name (str): The file path to the TensorFlow Lite model compiled for the Edge TPU.
@@ -77,3 +77,14 @@ class CoralInterpreter:
                 raise ValueError(f"Output at index {i} has not been retrieved from the interpreter.")
             scale, zero_point = self.output_details[i]["quantization"]
             self.outputs[i] = (data.astype(np.float32) - zero_point) * scale
+
+    def run_inference(self) -> None:
+        """
+        Runs the entire inference pipeline:
+        1. Quantizes the input data.
+        2. Invokes the model inference.
+        3. Dequantizes the output data.
+        """
+        self.quantize_input()
+        self.invoke()
+        self.dequantize_output()
