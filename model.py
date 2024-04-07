@@ -14,7 +14,7 @@ def convert_and_compile(model_name: str, concrete_function, representative_datas
     """
     # Initialize the TensorFlow Lite converter
     converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_function])
-    
+
     # Ensure the model uses integer operations for Edge TPU compatibility
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     converter.representative_dataset = representative_dataset
