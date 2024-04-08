@@ -1,3 +1,5 @@
 *.tflite
 *.log
 __pycache__/
+logs/
+wip/
