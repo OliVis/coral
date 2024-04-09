@@ -50,22 +50,30 @@ with tf.summary.create_file_writer("logs").as_default():
 # Initialize Interpreter with the TensorFlow Lite model and input size
 interpreter = coral.EdgeTPUInterpreter("model_edgetpu.tflite", [2,NUM_SAMPLES])
 
-# Generate an array of random complex numbers
-input_complex = coral.random_complex(COMPLEX_RADIUS, NUM_SAMPLES).astype(np.complex64)
+# Generate an array of random complex numbers for input
+complex_input = coral.random_complex(COMPLEX_RADIUS, NUM_SAMPLES).astype(np.complex64)
 
-# Prepare input for the interpreter by splitting real and imaginary parts
-interpreter.inputs[0] = np.array([input_complex.real, input_complex.imag])
+# Split the real and imaginary parts to create the model input
+model_input = np.array([complex_input.real, complex_input.imag])
+
+# Calculate the expected output using NumPy's FFT
+numpy_output = np.fft.fft(complex_input)
+
+# Use the model to compute the output directly without quantization
+model_output = fft.compute(model_input).numpy()
+model_output = model_output[0] + model_output[1] * 1j # Convert back to complex numbers
+
+# Set the model input to the interpreter
+interpreter.inputs[0] = model_input
 
 # Run the quantized inference on the Edge TPU
 interpreter.run_inference()
 
-# Calculate expected output using NumPy's FFT
-expected_output = np.fft.fft(input_complex)
+# Retrieve the output from the interpreter and convert it back to complex numbers
+coral_output = interpreter.outputs[0][0] + interpreter.outputs[0][1] * 1j
 
-# Retrieve and convert the output from the interpreter back to complex numbers
-model_output = interpreter.outputs[0][0] + interpreter.outputs[0][1] * 1j
-
-# Print input, expected output, and model output for comparison
-print(f"Input:\n{input_complex}")
-print(f"Expected:\n{expected_output}")
-print(f"Output:\n{model_output}")
+# Print the results for comparison
+print(f"Input:\n{complex_input}")
+print(f"NumPy:\n{numpy_output}")
+print(f"Model:\n{model_output}")
+print(f"Coral:\n{coral_output}")

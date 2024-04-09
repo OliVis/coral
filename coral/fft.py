@@ -10,13 +10,16 @@ class FFT:
         Args:
             size (int): The size of the FFT, which must be a power of 2.
         """
-        self.size = size
-        self.stages = int(math.log2(size))
+        # Properties of the FFT
+        self.size = size                   # The size of the input
+        self.stages = int(math.log2(size)) # The number of butterfly stages
 
+        # Generate bit-reversed indices for the FFT stages
+        # These indices are used to reorder the input for the FFT computation
         self.bit_rev_indices = tf.constant(self.bit_rev_list(size))
 
-        # Create test twiddle factors for each stage
-        self.twiddles = [tf.ones([2, 2**k]) for k in range(self.stages)]
+        # Create twiddle factors (complex roots of unity) for each FFT stage
+        self.twiddles = self.create_twiddles(self.stages)
 
     def bit_rev_list(self, list_size: int) -> list[int]:
         """
@@ -43,8 +46,59 @@ class FFT:
         # Return the constructed bit-reversed list
         return array
 
-    def twiddles():
-        pass
+    def create_twiddles(self, stages: int) -> list[tf.Tensor]:
+        """
+        Create twiddle factors (complex roots of unity) for the Cooley-Tukey FFT algorithm.
+
+        Twiddle factors are used in FFT computations to perform butterfly operations
+        by rotating and combining input elements in the frequency domain.
+
+        Args:
+            stages (int): Number of FFT stages (log2 of the FFT size).
+
+        Returns:
+            list[tf.Tensor]: List of twiddle factor tensors for each FFT stage.
+        """
+        # Twiddle factors (W^k_n) are complex roots of unity used in FFT computations.
+        # For a given stage s with N = 2^(s + 1) (butterfly size),  
+        # the twiddle factor is calculated using Euler's formula:
+        #   W^k_n = e^(-2πi * k / N)
+        # where:
+        #   k ranges from 0 to N/2 - 1 to generate N/2 twiddle factors.
+        #   N is the size of the butterfly operation at the current FFT stage.
+        #
+        # To compute the real and imaginary parts of each twiddle factor:
+        # Calculate the exponent array:
+        #   exponents = [0, 2π/N, 4π/N, ..., (N/2 - 1) * (2π/N)]
+        # Compute the real parts:
+        #   real_parts = cos(exponents)
+        # Compute the imaginary parts (negative sine for complex conjugation):
+        #   imag_parts = -sin(exponents)
+        #
+        # The twiddle factor tensor for each stage is structured as a 2x(N/2) tensor,
+        # where the first row represents the real parts and the second row represents
+        # the imaginary parts.
+        twiddle_factors = []
+
+        for stage in range(stages):
+            # Determine the size of the butterfly operation
+            butterfly_size = 2 ** (stage + 1)
+
+            # Create 1D exponent array with length N / 2
+            exponents = tf.range(butterfly_size / 2.0) * 2.0 * math.pi / butterfly_size
+
+            # Compute real and imaginary parts of twiddle factors
+            real_parts = tf.math.cos(exponents)
+            imag_parts = -1.0 * tf.math.sin(exponents)
+
+            # Stack real and imaginary parts to create twiddle factor tensor of shape (2, N/2)
+            twiddle_tensor = tf.stack([real_parts, imag_parts])
+
+            # Append the twiddle factor tensor to the list of twiddle factors
+            twiddle_factors.append(twiddle_tensor)
+
+        # Return the list of twiddle factor tensors for each FFT stage
+        return twiddle_factors
 
     def butterfly(self, tensor: tf.Tensor, stage: int) -> tf.Tensor:
         """
