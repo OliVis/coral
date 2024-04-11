@@ -2,6 +2,9 @@ import tensorflow as tf
 import numpy as np
 import coral
 
+# Run this script from the project root directory using the following command:
+# python -m demos.complex_demo
+
 # =============================================================================
 #                            MODEL CREATION
 # =============================================================================

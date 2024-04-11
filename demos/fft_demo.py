@@ -2,6 +2,9 @@ import tensorflow as tf
 import numpy as np
 import coral
 
+# Run this script from the project root directory using the following command:
+# python -m demos.fft_demo
+
 COMPLEX_RADIUS = 20 # Radius used for generating random complex numbers
 NUM_SAMPLES = 8     # Number of complex samples and input size of the FFT
 
