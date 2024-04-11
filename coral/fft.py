@@ -1,5 +1,6 @@
-import tensorflow as tf
 import math
+import tensorflow as tf
+from .model import create_model
 
 class FFT:
     def __init__(self, size: int) -> None:
@@ -175,3 +176,42 @@ class FFT:
 
         # Reshape the tensor back to the original shape after all stages are processed
         return tf.reshape(tensor, [2, self.size])
+
+def build_fft_model(size: int) -> None:
+    """
+    Build and compile an FFT (Fast Fourier Transform) TensorFlow Lite model optimized for the Coral Edge TPU.
+
+    Args:
+        size (int): The size of the FFT, which must be a power of 2.
+    """
+    # Check if input_size is a power of 2
+    if size <= 0 or (size & (size - 1)) != 0:
+        raise ValueError("FFT size must be a positive power of 2.")
+
+    # Create an instance of FFT with the specified input_size
+    fft = FFT(size)
+
+    # Create a concrete function trace for the FFT computation
+    concrete_func = fft.compute.get_concrete_function(
+        tf.TensorSpec(shape=(2, size), dtype=tf.float32)
+    )
+
+    # Dataset used for quantization
+    def representative_dataset():
+        for _ in range(500):
+            yield [tf.random.uniform([2, size], -127, 127)]
+
+    # Convert the TensorFlow model to TensorFlow Lite and compile for Coral Edge TPU
+    create_model(f"fft_{size}.tflite", concrete_func, representative_dataset)
+
+def fft_model_name(size: int) -> str:
+    """
+    Generate the filename for an Edge TPU-compiled FFT TensorFlow Lite model based on the input size.
+
+    Args:
+        size (int): Size of the FFT.
+
+    Returns:
+        str: Filename of the FFT model.
+    """
+    return f"fft_{size}_edgetpu.tflite"
