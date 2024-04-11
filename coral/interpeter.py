@@ -88,3 +88,77 @@ class EdgeTPUInterpreter:
         self.quantize_input()
         self.invoke()
         self.dequantize_output()
+
+
+class EdgeTPUInterpreterSingle:
+    """
+    Facilitates TensorFlow Lite model inference on Coral Edge TPU devices,
+    handling the entire inference cycle including input quantization, model execution,
+    and output dequantization.
+    """
+
+    def __init__(self, model_name: str, input_size: list[int]) -> None:
+        """
+        Initializes a EdgeTPUInterpreter instance with the specified Edge TPU model.
+        Interpreter with a single input and output.
+
+        Args:
+            model_name (str): The file path to the TensorFlow Lite model compiled for the Edge TPU.
+            input_size (list[int]): The shape/size of input tensors expected by the model.
+        """
+        # Initialize the Edge TPU interpreter with the specified model
+        self._interpreter = edgetpu.make_interpreter(model_name)
+
+        # Retrieve details about the model's input and output tensors
+        self.input_details = self._interpreter.get_input_details()[0]
+        self.output_details = self._interpreter.get_output_details()[0]
+
+        # Placeholder for input and output tensor
+        self.input = None
+        self.output = None
+
+        # Resize input tensor based on the provided input_size
+        self._interpreter.resize_tensor_input(self.input_details["index"], input_size)
+
+        # Allocate memory for input and output tensor
+        self._interpreter.allocate_tensors()
+
+    def quantize_input(self) -> None:
+        """
+        Quantizes the input data stored in `self.input` according to the input tensor's
+        quantization parameters. It's expected that `self.input` is populated with a float32 numpy array.
+        """
+        scale, zero_point = self.input_details["quantization"]
+        self.input = np.clip(np.round(self.input / scale + zero_point), -127, 127).astype(np.int8)
+
+    def invoke(self) -> None:
+        """
+        Performs inference using the current (quantized) input, updating `self.output` with the raw results.
+        """
+        # Set the input tensor in the interpreter
+        self._interpreter.set_tensor(self.input_details["index"], self.input)
+
+        # Run inference
+        self._interpreter.invoke()
+
+        # Retrieve and store the raw output tensor from the interpreter
+        self.output = self._interpreter.get_tensor(self.output_details['index'])
+
+    def dequantize_output(self) -> None:
+        """
+        Dequantizes the data for the output stored in `self.output` according to 
+        the tensor's quantization parameters.
+        """
+        scale, zero_point = self.output_details["quantization"]
+        self.output = (self.output.astype(np.float32) - zero_point) * scale
+
+    def run_inference(self) -> None:
+        """
+        Runs the entire inference pipeline:
+        1. Quantizes the input data.
+        2. Invokes the model inference.
+        3. Dequantizes the output data.
+        """
+        self.quantize_input()
+        self.invoke()
+        self.dequantize_output()
