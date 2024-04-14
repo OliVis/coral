@@ -20,7 +20,7 @@ class FFT:
 
         # Generate bit-reversed indices for the FFT stages
         # These indices are used to reorder the input for the FFT computation
-        self.bit_rev_indices = tf.constant(self.bit_rev_list(size))
+        self.bit_rev_indices = self.bit_rev_list(size)
 
         # Create twiddle factors (complex roots of unity) for each FFT stage
         self.twiddles = self.create_twiddles(self.stages)
@@ -155,15 +155,30 @@ class FFT:
         Compute the Fast Fourier Transform (FFT) of the input tensor using the Cooley-Tukey algorithm.
 
         Args:
-            tensor (tf.Tensor): Input tensor with shape (2, self.size),
-            where the first dimension of size 2 represents the real and imaginary parts of complex numbers.
+            tensor (tf.Tensor): Input tensor with shape (1, 2 * `self.size`),
+            where `self.size` complex numbers are represented by pairs of consecutive floats.
 
         Returns:
-            tf.Tensor: Transformed tensor representing the FFT result with shape (2, self.size).
+            tf.Tensor: Transformed tensor representing the FFT result with shape (2, `self.size`),
+            where the first dimension corresponds to the real or imaginary parts of the complex numbers.
         """
-        # Reorder the input using the bit-reversed indices
-        # Note: This operation is not supported by the Edge TPU (TODO)
-        tensor = tf.gather(tensor, self.bit_rev_indices, axis=1)
+        # Reshape the tensor to pairs of complex number, each pair consists of the real and imaginary part
+        tensor = tf.reshape(tensor, [self.size, 2])
+
+        # Transpose the tensor to group the real and imaginary parts together
+        # This allows separate (broadcasted) calculations on the real or imaginary parts
+        tensor = tf.transpose(tensor)
+
+        # Split the tensor into a list of complex numbers
+        tensor_list = tf.split(tensor, self.size, axis=1)
+
+        # Reorder the complex numbers according to the bit-reversal indices and concatenate them back together
+        tensor = tf.concat([tensor_list[i] for i in self.bit_rev_indices], axis=1)
+
+        # Alternative approach using tf.stack (generates more instructions, but uses less memory)
+        # TODO: Compare the performance
+        # tensor = tf.reshape(tensor, [self.size, 2])
+        # tensor = tf.stack([tensor[i] for i in self.bit_rev_indices], axis=1)
 
         # Apply Cooley-Tukey FFT algorithm using butterfly operations
         for stage in range(self.stages):
@@ -189,7 +204,7 @@ class FFT:
         """
         # Create a trace of the function directly
         concrete_func = self.compute.get_concrete_function(
-            tf.TensorSpec(shape=(2, self.size), dtype=tf.float32)
+            tf.TensorSpec(shape=(1, 2 * self.size), dtype=tf.float32)
         )
         return concrete_func
 
@@ -201,7 +216,7 @@ class FFT:
             Generator[tf.Tensor, None, None]: A generator yielding random tensors.
         """
         for _ in range(500):
-            yield [tf.random.uniform([2, self.size], -127, 127)]
+            yield [tf.random.uniform([1, 2 * self.size], -127, 127)]
 
     def export_model(self, model_name: str) -> None:
         """
