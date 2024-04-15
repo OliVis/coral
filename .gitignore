@@ -1,4 +1,8 @@
+.vscode/
+*.swp
 *.tflite
 *.log
 __pycache__/
 models/
+external/
+build/
