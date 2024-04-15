@@ -14,18 +14,15 @@ def main():
     # Test model conversion to TensorFlow Lite and Edge TPU compilation
     fft.export_model("test")
 
-    # Generate a 1D array representing complex numbers in the format produced by the rtl-sdr
-    # Each complex number consists of a pair of consecutive floats: [real_part, imaginary_part]
-    # The length of the array is twice the FFT_SIZE to accommodate pairs of floats
-    data_array = np.random.uniform(-127, 127, 2 * FFT_SIZE).astype(np.float32)
+    # Generate a 2D array representing an array complex numbers in the format produced by the rtl-sdr
+    # Each complex number consists of a pair of floats: [real, imag, real, imag, ...]
+    data_array = np.random.uniform(low=-1, high=1, size=(FFT_SIZE, 2)).astype(np.float32)
 
     # Calculate the FFT using the TensorFlow model
     model_output = fft.compute(data_array)
 
-    # Reshape the 1D array into pairs of floats (2 columns) representing complex numbers
-    complex_array = data_array.reshape(-1, 2)
     # Create complex numbers from pairs of floats
-    complex_array = complex_array[:, 0] + 1j * complex_array[:, 1]
+    complex_array = data_array[:, 0] + 1j * data_array[:, 1]
 
     # Calculate the FFT using NumPy for comparison
     numpy_output = np.fft.fft(complex_array)

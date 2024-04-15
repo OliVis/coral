@@ -155,16 +155,12 @@ class FFT:
         Compute the Fast Fourier Transform (FFT) of the input tensor using the Cooley-Tukey algorithm.
 
         Args:
-            tensor (tf.Tensor): Input tensor with shape (1, 2 * `self.size`),
-            where `self.size` complex numbers are represented by pairs of consecutive floats.
+            tensor (tf.Tensor): Input tensor with shape (`self.size`, 2), where `self.size` is the number of
+                                complex numbers, represented as pairs of floats (real, imaginary).
 
         Returns:
-            tf.Tensor: Transformed tensor representing the FFT result with shape (2, `self.size`),
-            where the first dimension corresponds to the real or imaginary parts of the complex numbers.
+            tf.Tensor: Transformed tensor containing the FFT result with the same shape (`self.size`, 2).
         """
-        # Reshape the tensor to pairs of complex number, each pair consists of the real and imaginary part
-        tensor = tf.reshape(tensor, [self.size, 2])
-
         # Transpose the tensor to group the real and imaginary parts together
         # This allows separate (broadcasted) calculations on the real or imaginary parts
         tensor = tf.transpose(tensor)
@@ -177,7 +173,6 @@ class FFT:
 
         # Alternative approach using tf.stack (generates more instructions, but uses less memory)
         # TODO: Compare the performance
-        # tensor = tf.reshape(tensor, [self.size, 2])
         # tensor = tf.stack([tensor[i] for i in self.bit_rev_indices], axis=1)
 
         # Apply Cooley-Tukey FFT algorithm using butterfly operations
@@ -192,8 +187,12 @@ class FFT:
             # Perform butterfly operations for the current stage
             tensor = self.butterfly(tensor, stage)
 
-        # Reshape the tensor back to the original shape after all stages are processed
-        return tf.reshape(tensor, [2, self.size])
+        # Reshape back to the original shape
+        tensor = tf.reshape(tensor, [2, self.size])
+
+        # Transpose the tensor to return a tensor of complex numbers, 
+        # where each complex number consists of a pair of floats, with the FFT applied
+        return tf.transpose(tensor)
 
     def concrete_function(self) -> tf.types.experimental.ConcreteFunction:
         """
@@ -204,7 +203,7 @@ class FFT:
         """
         # Create a trace of the function directly
         concrete_func = self.compute.get_concrete_function(
-            tf.TensorSpec(shape=(1, 2 * self.size), dtype=tf.float32)
+            tf.TensorSpec(shape=(self.size, 2), dtype=tf.float32)
         )
         return concrete_func
 
@@ -216,7 +215,7 @@ class FFT:
             Generator[tf.Tensor, None, None]: A generator yielding random tensors.
         """
         for _ in range(500):
-            yield [tf.random.uniform([1, 2 * self.size], -127, 127)]
+            yield [tf.random.uniform(shape=[self.size, 2], minval=-1, maxval=1, dtype=tf.float32)]
 
     def export_model(self, model_name: str) -> None:
         """
