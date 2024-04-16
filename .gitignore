@@ -3,6 +3,5 @@
 *.tflite
 *.log
 __pycache__/
-models/
-external/
+tensorflow/
 build/
