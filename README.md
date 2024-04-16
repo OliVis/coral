@@ -20,7 +20,7 @@ To install this project, follow these steps:
 
 2. Clone the project repository:
 ```bash
-git clone https://github.com/dfg/coral.git
+git clone https://github.com/OliVis/coral.git
 cd coral
 ```
 
