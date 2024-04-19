@@ -1,12 +1,20 @@
 cmake_minimum_required(VERSION 3.18)
-project(minimal C CXX)
+project(coral C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_subdirectory(tensorflow/tensorflow/lite EXCLUDE_FROM_ALL)
+set(SOURCE_DIR "src")
+set(INCLUDE_DIR "include")
 
 find_library(LIBEDGETPU edgetpu REQUIRED)
 
-add_executable(minimal minimal.cc)
+add_subdirectory(tensorflow/tensorflow/lite EXCLUDE_FROM_ALL)
 
-target_link_libraries(minimal tensorflow-lite ${LIBEDGETPU})
+add_executable(coral)
+target_sources(coral PRIVATE
+  ${SOURCE_DIR}/main.cpp
+  ${SOURCE_DIR}/interpreter.cpp
+)
+target_include_directories(coral PRIVATE ${INCLUDE_DIR})
+
+target_link_libraries(coral tensorflow-lite ${LIBEDGETPU})
