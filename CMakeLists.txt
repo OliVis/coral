@@ -17,4 +17,4 @@ target_sources(coral PRIVATE
 )
 target_include_directories(coral PRIVATE ${INCLUDE_DIR})
 
-target_link_libraries(coral tensorflow-lite ${LIBEDGETPU})
+target_link_libraries(coral PRIVATE tensorflow-lite ${LIBEDGETPU})

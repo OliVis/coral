@@ -1,8 +1,10 @@
 #include <iostream>
+#include <stdexcept>
 #include "coral/interpreter.h"
+#include "tensorflow/lite/kernels/register.h"
+#include "tensorflow/lite/model.h"
 
-EdgeTPUInterpreter::EdgeTPUInterpreter(const char* model_path)
-{
+EdgeTPUInterpreter::EdgeTPUInterpreter(const char* model_path) {
     // Load the compiled Edge TPU model as a FlatBufferModel
     std::unique_ptr<tflite::FlatBufferModel> model =
         tflite::FlatBufferModel::BuildFromFile(model_path);
@@ -20,24 +22,15 @@ EdgeTPUInterpreter::EdgeTPUInterpreter(const char* model_path)
     interpreter->SetNumThreads(1);
 
     if (interpreter->AllocateTensors() != kTfLiteOk) {
-        std::cerr << "Failed to allocate tensors." << std::endl;
+        throw std::runtime_error("Failed to allocate tensors.");
     }
 
-    // Get input tensor quantization parameters
-    input_quant.scale = interpreter->input_tensor(0)->params.scale;
-    input_quant.zero_point = interpreter->input_tensor(0)->params.zero_point;
-
-    // Get output tensor quantization parameters
-    output_quant.scale = interpreter->output_tensor(0)->params.scale;
-    output_quant.zero_point = interpreter->output_tensor(0)->params.zero_point;
-
-    // Get pointers to input and output tensors
-    input_data_ptr = interpreter->typed_input_tensor<int8_t>(0);
-    output_data_ptr = interpreter->typed_output_tensor<int8_t>(0);
+    // Initialize input and output tensor information
+    fillTensorInfo(interpreter->input_tensor(0), input_tensor_info);
+    fillTensorInfo(interpreter->output_tensor(0), output_tensor_info);
 }
 
-EdgeTPUInterpreter::~EdgeTPUInterpreter()
-{
+EdgeTPUInterpreter::~EdgeTPUInterpreter() {
     // Releases interpreter instance to free up resources associated with this custom op
     interpreter.reset();
 
@@ -45,8 +38,33 @@ EdgeTPUInterpreter::~EdgeTPUInterpreter()
     edgetpu_context.reset();
 }
 
-TfLiteStatus EdgeTPUInterpreter::invoke()
-{
+TfLiteStatus EdgeTPUInterpreter::invoke() {
     // Invoke the interpreter and return the status
     return interpreter->Invoke();
+}
+
+void EdgeTPUInterpreter::fillTensorInfo(const TfLiteTensor* tensor, TensorInfo& tensor_info) {
+    // Set tensor size
+    tensor_info.size = tensor->bytes / sizeof(int8_t);
+
+    // Set tensor shape
+    tensor_info.shape.clear();
+    for (int i = 0; i < tensor->dims->size; ++i) {
+        tensor_info.shape.push_back(tensor->dims->data[i]);
+    }
+
+    // Set tensor data pointer
+    tensor_info.data_ptr = reinterpret_cast<int8_t*>(tensor->data.data);
+
+    // Set tensor quantization parameters
+    tensor_info.quantization.scale = tensor->params.scale;
+    tensor_info.quantization.zero_point = tensor->params.zero_point;
+}
+
+const TensorInfo& EdgeTPUInterpreter::getInputTensorInfo() const {
+    return input_tensor_info;
+}
+
+const TensorInfo& EdgeTPUInterpreter::getOutputTensorInfo() const {
+    return output_tensor_info;
 }
