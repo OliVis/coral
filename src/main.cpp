@@ -2,6 +2,10 @@
 #include <cstdint>
 #include <limits>
 #include "coral/interpreter.h"
+#include "coral/rtlsdr.h"
+
+// Convert Hz to MHz
+#define MHz *1000000
 
 /* Output from test.py
 Input:
@@ -85,6 +89,12 @@ int main() {
         ++output_ptr; // Increment data pointer
     }
     std::cout << std::endl;
+
+    // Test the RTL-SDR class
+    RtlSdr sdr;
+    sdr.set_sample_rate(2.04 MHz);
+    sdr.set_center_freq(80 MHz);
+    sdr.set_gain(60);
 
     return 0;
 }
