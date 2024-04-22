@@ -35,6 +35,10 @@ Model:
  [-2.2307038   0.55832124]]
 */
 
+void callback(uint8_t* buf, uint32_t len, void* ctx) {
+    std::cout << len << " bytes read." << std::endl;
+}
+
 int main() {
     // Initialize EdgeTPUInterpreter with model path
     EdgeTPUInterpreter interpreter("../test_edgetpu.tflite");
@@ -113,6 +117,8 @@ int main() {
     sdr.set_sample_rate(2.04 MHz);
     sdr.set_center_freq(80 MHz);
     sdr.set_gain(60);
+
+    sdr.read_async(callback, nullptr, 512);
 
     return 0;
 }

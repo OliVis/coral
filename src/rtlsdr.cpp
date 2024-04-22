@@ -6,8 +6,11 @@
 #include "coral/rtlsdr.h"
 
 RtlSdr::RtlSdr(const uint32_t device_index) {
-    if (rtlsdr_open(&device_ptr, device_index) != 0) {
-        throw std::runtime_error("Could not open RTL-SDR.");
+    if (rtlsdr_open(&device_ptr, device_index) < 0) {
+        throw std::runtime_error("Error: Failed to open the RTL-SDR device.");
+    }
+    if (rtlsdr_reset_buffer(device_ptr) < 0) {
+        throw std::runtime_error("Error: Failed to reset the buffer.");
     }
 }
 
@@ -27,9 +30,9 @@ int RtlSdr::set_gain(const int gain) {
     int nearest_gain = 0; // Nearest supported gain to the target gain
 
     // Set manual gain mode
-    if (int result = rtlsdr_set_tuner_gain_mode(device_ptr, 1); result != 0) {
-        std::cerr << "Failed to enable manual gain mode." << std::endl;
-        return result; // Return error code if setting gain mode fails
+    if (int result = rtlsdr_set_tuner_gain_mode(device_ptr, 1); result < 0) {
+        std::cerr << "Error: Failed to enable manual gain mode." << std::endl;
+        return result;
     }
 
     // Get the number of available tuner gains
@@ -65,4 +68,40 @@ int RtlSdr::set_auto_gain() {
 
 int RtlSdr::set_agc_mode(const bool on) {
     return rtlsdr_set_agc_mode(device_ptr, on);
+}
+
+int RtlSdr::read_sync(uint8_t* buffer, const int num_bytes) const {
+    if (num_bytes % 512 != 0) {
+        throw std::runtime_error("Error: Number of bytes is not a multiple of 512.");
+    }
+
+    int bytes_read; // Number of bytes actually read
+    int result = rtlsdr_read_sync(device_ptr, buffer, num_bytes, &bytes_read);
+    
+    // Check if the read operation was successful
+    if (result < 0) {
+        std::cerr << "Error: Failed to read data from RTL-SDR device." << std::endl;
+        return result;
+    }
+
+    // Verify that the correct number of bytes were read
+    if (bytes_read != num_bytes) {
+        throw std::runtime_error("Error: Did not read the requested number of bytes.");
+    }
+
+    return result;
+}
+
+int RtlSdr::read_async(rtlsdr_callback_t callback, void* context, const int num_bytes,
+                       const int num_buffers) const {
+    if (num_bytes % 512 != 0) {
+        throw std::runtime_error("Error: Number of bytes is not a multiple of 512.");
+    }
+
+    // Initiate the asynchronous read operation
+    return rtlsdr_read_async(device_ptr, callback, context, num_buffers, num_bytes);
+}
+
+int RtlSdr::cancel_async() const {
+    return rtlsdr_cancel_async(device_ptr);
 }

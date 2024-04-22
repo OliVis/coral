@@ -22,7 +22,7 @@ EdgeTPUInterpreter::EdgeTPUInterpreter(const char* model_path) {
     interpreter->SetNumThreads(1);
 
     if (interpreter->AllocateTensors() != kTfLiteOk) {
-        throw std::runtime_error("Failed to allocate tensors.");
+        throw std::runtime_error("Error: Failed to allocate tensors.");
     }
 
     // Initialize input and output tensor information
