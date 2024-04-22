@@ -3,6 +3,7 @@
 #include <limits>
 #include "coral/interpreter.h"
 #include "coral/rtlsdr.h"
+#include "coral/buffer.h"
 
 // Convert Hz to MHz
 #define MHz *1000000
@@ -87,6 +88,23 @@ int main() {
         std::cout << value << " ";
 
         ++output_ptr; // Increment data pointer
+    }
+    std::cout << std::endl;
+
+    // Test the buffer class
+    CircularBuffer cb(1,5);
+    uint8_t buf;
+    
+    for (int i = 0; i < 10; i++) {
+        // fill the buffer
+        buf = i;
+        cb.put(&buf);
+    }
+    std::cout << "Buffer:";
+    for (int i = 0; i < 5; i++) {
+        // empty the buffer
+        cb.get(&buf);
+        std::cout << " " << (int)buf;
     }
     std::cout << std::endl;
 

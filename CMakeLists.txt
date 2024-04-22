@@ -17,6 +17,7 @@ target_sources(coral PRIVATE
   ${SOURCE_DIR}/main.cpp
   ${SOURCE_DIR}/interpreter.cpp
   ${SOURCE_DIR}/rtlsdr.cpp
+  ${SOURCE_DIR}/buffer.cpp
 )
 target_include_directories(coral PRIVATE ${INCLUDE_DIR})
 
