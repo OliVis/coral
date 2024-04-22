@@ -11,6 +11,7 @@ Ensure that you have the following installed on your system:
 - Python with TensorFlow 2.16.1
 - CMake 3.18+
 - gasket-dkms
+- librtlsdr-dev
 
 ### Installation
 
