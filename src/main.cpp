@@ -38,7 +38,7 @@ int main() {
     // Initialize EdgeTPUInterpreter with model path
     EdgeTPUInterpreter interpreter("../test_edgetpu.tflite");
 
-    const size_t input_size = interpreter.getInputTensorInfo().size;
+    const size_t input_size = interpreter.input_tensor_info().size;
 
     // Input data from test.py (example values)
     float input_data[input_size] = {
@@ -53,8 +53,8 @@ int main() {
     };
     
     // Quantize the input data and copy to interpreter's input data buffer
-    int8_t* input_ptr = interpreter.getInputTensorInfo().data_ptr;
-    QuantizationParams input_quant = interpreter.getInputTensorInfo().quantization;
+    int8_t* input_ptr = interpreter.input_tensor_info().data_ptr;
+    QuantizationParams input_quant = interpreter.input_tensor_info().quantization;
     std::cout << "Quantized data:" << std::endl;
     for (int i = 0; i < input_size; ++i) {
         float value = (input_data[i] / input_quant.scale) + input_quant.zero_point;
@@ -77,8 +77,8 @@ int main() {
     interpreter.invoke();
 
     // Dequantize and print each element of the output data
-    int8_t* output_ptr = interpreter.getOutputTensorInfo().data_ptr;
-    QuantizationParams output_quant = interpreter.getOutputTensorInfo().quantization;
+    int8_t* output_ptr = interpreter.output_tensor_info().data_ptr;
+    QuantizationParams output_quant = interpreter.output_tensor_info().quantization;
     std::cout << "Output data:" << std::endl;
     for (int i = 0; i < input_size; ++i) {
         float value = (static_cast<float>(*output_ptr) - output_quant.zero_point) * output_quant.scale;

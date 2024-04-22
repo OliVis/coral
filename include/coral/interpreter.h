@@ -19,24 +19,46 @@ struct TensorInfo {
     QuantizationParams quantization;
 };
 
+/**
+ * @brief A wrapper class for running TensorFlow Lite models on an Edge TPU device.
+ */
 class EdgeTPUInterpreter {
 public:
+    /**
+     * @brief Constructs an EdgeTPUInterpreter object with the specified model path.
+     * @param model_path The path to the TensorFlow Lite model file optimized for the Edge TPU.
+     */
     EdgeTPUInterpreter(const char* model_path);
+
+    /**
+     * @brief Destructs the EdgeTPUInterpreter object, releasing associated resources.
+     */
     ~EdgeTPUInterpreter();
 
-    // Run inference on the loaded model
+    /**
+     * @brief Invokes the interpreter to run the inference graph.
+     * @return Status of success or failure.
+     */
     TfLiteStatus invoke();
 
-    // Getters for input and output tensor information
-    const TensorInfo& getInputTensorInfo() const;
-    const TensorInfo& getOutputTensorInfo() const;
+    /**
+     * @brief Retrieves information about the input tensor.
+     * @return A reference to the TensorInfo structure containing input tensor information.
+     */
+    const TensorInfo& input_tensor_info() const;
+
+    /**
+     * @brief Retrieves information about the output tensor.
+     * @return A reference to the TensorInfo structure containing output tensor information.
+     */
+    const TensorInfo& output_tensor_info() const;
 
 private:
     std::shared_ptr<edgetpu::EdgeTpuContext> edgetpu_context;
     std::unique_ptr<tflite::Interpreter> interpreter;
 
-    TensorInfo input_tensor_info;
-    TensorInfo output_tensor_info;
+    TensorInfo input_tensor_info_;
+    TensorInfo output_tensor_info_;
 
     void fillTensorInfo(const TfLiteTensor* tensor, TensorInfo& tensor_info);
 };

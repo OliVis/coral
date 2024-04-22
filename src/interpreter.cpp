@@ -26,8 +26,8 @@ EdgeTPUInterpreter::EdgeTPUInterpreter(const char* model_path) {
     }
 
     // Initialize input and output tensor information
-    fillTensorInfo(interpreter->input_tensor(0), input_tensor_info);
-    fillTensorInfo(interpreter->output_tensor(0), output_tensor_info);
+    fillTensorInfo(interpreter->input_tensor(0), input_tensor_info_);
+    fillTensorInfo(interpreter->output_tensor(0), output_tensor_info_);
 }
 
 EdgeTPUInterpreter::~EdgeTPUInterpreter() {
@@ -61,10 +61,10 @@ void EdgeTPUInterpreter::fillTensorInfo(const TfLiteTensor* tensor, TensorInfo& 
     tensor_info.quantization.zero_point = tensor->params.zero_point;
 }
 
-const TensorInfo& EdgeTPUInterpreter::getInputTensorInfo() const {
-    return input_tensor_info;
+const TensorInfo& EdgeTPUInterpreter::input_tensor_info() const {
+    return input_tensor_info_;
 }
 
-const TensorInfo& EdgeTPUInterpreter::getOutputTensorInfo() const {
-    return output_tensor_info;
+const TensorInfo& EdgeTPUInterpreter::output_tensor_info() const {
+    return output_tensor_info_;
 }
