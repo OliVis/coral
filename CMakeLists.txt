@@ -6,11 +6,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(SOURCE_DIR "src")
 set(INCLUDE_DIR "include")
 
-find_library(LIBRTLSDR rtlsdr REQUIRED)
+find_package(Threads REQUIRED)
+
+add_subdirectory(tensorflow/tensorflow/lite EXCLUDE_FROM_ALL)
 
 find_library(LIBEDGETPU edgetpu REQUIRED)
 
-add_subdirectory(tensorflow/tensorflow/lite EXCLUDE_FROM_ALL)
+find_library(LIBRTLSDR rtlsdr REQUIRED)
 
 add_executable(coral)
 target_sources(coral PRIVATE
@@ -21,4 +23,9 @@ target_sources(coral PRIVATE
 )
 target_include_directories(coral PRIVATE ${INCLUDE_DIR})
 
-target_link_libraries(coral PRIVATE tensorflow-lite ${LIBEDGETPU} ${LIBRTLSDR})
+target_link_libraries(coral PRIVATE
+  ${CMAKE_THREAD_LIBS_INIT}
+  tensorflow-lite
+  ${LIBEDGETPU}
+  ${LIBRTLSDR}
+)
