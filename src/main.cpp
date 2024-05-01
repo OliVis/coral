@@ -58,14 +58,14 @@ int main() {
         std::stringstream command;
 
         // Create a new model
-        command << "python3 fft_model.py " << FFT_SIZE << " " << MODEL_NAME;
+        command << "python3 minimum_model.py " << FFT_SIZE << " " << MODEL_NAME;
         if (std::system(command.str().c_str()) < 0) {
             throw std::runtime_error("Error: Failed to build model.");
         }
     }
 
     // Create a circular buffer to hold RTL-SDR data
-    CircularBuffer queue(READ_SIZE, 10000);
+    CircularBuffer queue(READ_SIZE, 1000);
 
     // Initialize EdgeTPUInterpreter with model path
     EdgeTPUInterpreter interpreter(model_path);

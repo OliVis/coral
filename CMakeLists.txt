@@ -6,8 +6,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
-set(SCRIPT_NAME "fft_model.py")
-
 find_package(Threads REQUIRED)
 find_library(LIBEDGETPU edgetpu REQUIRED)
 find_library(LIBRTLSDR rtlsdr REQUIRED)
@@ -32,8 +30,8 @@ target_link_libraries(coral PRIVATE
   tensorflow-lite
 )
 
-configure_file(
-  ${CMAKE_SOURCE_DIR}/${SCRIPT_NAME}
-  ${CMAKE_BINARY_DIR}/${SCRIPT_NAME}
-  COPYONLY
-)
+target_compile_options(coral PRIVATE -Wall -Wextra)
+
+file(GLOB SCRIPTS ${CMAKE_SOURCE_DIR}/scripts/*.py)
+
+file(COPY ${SCRIPTS} DESTINATION ${CMAKE_BINARY_DIR})
