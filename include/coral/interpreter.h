@@ -1,6 +1,7 @@
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
 
+#include <string>
 #include <cstdint>
 #include <vector>
 #include <memory>
@@ -28,7 +29,7 @@ public:
      * @brief Constructs an EdgeTPUInterpreter object with the specified model path.
      * @param model_path The path to the TensorFlow Lite model file optimized for the Edge TPU.
      */
-    EdgeTPUInterpreter(const char* model_path);
+    EdgeTPUInterpreter(const std::string model_path);
 
     /**
      * @brief Destructs the EdgeTPUInterpreter object, releasing associated resources.

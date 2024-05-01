@@ -4,10 +4,10 @@
 #include "tensorflow/lite/kernels/register.h"
 #include "tensorflow/lite/model.h"
 
-EdgeTPUInterpreter::EdgeTPUInterpreter(const char* model_path) {
+EdgeTPUInterpreter::EdgeTPUInterpreter(const std::string model_path) {
     // Load the compiled Edge TPU model as a FlatBufferModel
     std::unique_ptr<tflite::FlatBufferModel> model =
-        tflite::FlatBufferModel::BuildFromFile(model_path);
+        tflite::FlatBufferModel::BuildFromFile(model_path.c_str());
 
     // Create the EdgeTpuContext object
     edgetpu_context = edgetpu::EdgeTpuManager::GetSingleton()->OpenDevice();

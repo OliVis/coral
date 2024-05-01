@@ -1,11 +1,17 @@
 #include <iostream>
+#include <string>
+#include <cstdlib>
 #include <cstdint>
 #include <thread>
+#include <sstream>
+#include <filesystem>
 #include "coral/interpreter.h"
 #include "coral/rtlsdr.h"
 #include "coral/buffer.h"
 
-#define READ_SIZE 16384
+const std::string MODEL_NAME = "FFT";
+const int FFT_SIZE = 1024;
+const int READ_SIZE = 16384;
 
 // Callback function to handle received data from the RTL-SDR
 void callback(uint8_t* buf, uint32_t len, void* ctx) {
@@ -46,11 +52,24 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue) {
 }
 
 int main() {
+    const std::string model_path = MODEL_NAME + "_edgetpu.tflite";
+
+    // Check if the EdgeTPU TensorFlow Lite model exists
+    if (!std::filesystem::exists(model_path)) {
+        std::stringstream command;
+
+        // Create a new model
+        command << "python3 fft_model.py " << FFT_SIZE << " " << MODEL_NAME;
+        if (std::system(command.str().c_str()) < 0) {
+            throw std::runtime_error("Error: Failed to build model.");
+        }
+    }
+
     // Create a circular buffer to hold RTL-SDR data
     CircularBuffer queue(READ_SIZE, 10000);
 
     // Initialize EdgeTPUInterpreter with model path
-    EdgeTPUInterpreter interpreter("../test_edgetpu.tflite");
+    EdgeTPUInterpreter interpreter(model_path);
 
     // Start a thread to process data on the EdgeTPU
     std::thread tpu_thread([&interpreter, &queue]() {
