@@ -26,7 +26,8 @@ int RtlSdr::set_center_freq(const uint32_t freq) {
     return rtlsdr_set_center_freq(device_ptr, freq);
 }
 
-int RtlSdr::set_gain(const int gain) {
+int RtlSdr::set_gain(const float gain) {
+    const int target_gain = round(gain * 10.0); // Gain is used in tenths of a dB
     int nearest_gain = 0; // Nearest supported gain to the target gain
 
     // Set manual gain mode
@@ -49,7 +50,7 @@ int RtlSdr::set_gain(const int gain) {
 
         // Find the nearest supported gain to the specified gain
         for (const int& g : gains) {
-            int diff = std::abs(g - gain);
+            int diff = std::abs(g - target_gain);
             if (diff <= min_diff) {
                 nearest_gain = g;
                 min_diff = diff;

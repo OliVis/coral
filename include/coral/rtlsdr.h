@@ -46,10 +46,10 @@ public:
     /**
      * @brief Sets the gain for the device.
      *        The gain value will be rounded to the nearest value supported by the device.
-     * @param gain Gain in tenths of a dB (e.g., 10 means 1 dB).
+     * @param gain The target gain value in dB.
      * @return 0 on success, non-zero on error.
      */
-    int set_gain(const int gain);
+    int set_gain(const float gain);
     
     /**
      * @brief Enable automatic gain mode for the device.
