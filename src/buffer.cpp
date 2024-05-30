@@ -19,7 +19,7 @@ void CircularBuffer::put(const uint8_t* source_buffer) {
 
     // If buffer is full, drop the oldest sample (overwrite the tail)
     if (count == capacity) {
-        std::cerr << "Dropping sample." << std::endl;
+        std::cerr << "# Dropping sample." << std::endl;
         tail_index = (tail_index + 1) % capacity;
         count--;
     }

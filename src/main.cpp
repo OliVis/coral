@@ -5,17 +5,25 @@
 #include <thread>
 #include <sstream>
 #include <filesystem>
+#include <chrono>
 #include "coral/interpreter.h"
 #include "coral/rtlsdr.h"
 #include "coral/buffer.h"
 
-const std::string MODEL_NAME = "FFT";
 const size_t FFT_SIZE = 1024;
 const size_t READ_SIZE = 16384;
+const std::string MODEL_SUFFIX = "_edgetpu.tflite";
 
 // Callback function to handle received data from the RTL-SDR
 void callback(uint8_t* buf, uint32_t len, void* ctx) {
     CircularBuffer* queue = reinterpret_cast<CircularBuffer*>(ctx);
+
+    // Measure time between callbacks
+    static auto last_callback = std::chrono::high_resolution_clock::now();
+    auto current_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_callback = current_time - last_callback;
+    last_callback = current_time;
+    std::cerr << std::fixed << "Time between callbacks: " << elapsed_callback.count() << " seconds" << std::endl;
 
     // Place sample in the queue
     queue->put(buf);
@@ -32,11 +40,15 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue) {
     uint8_t buffer[READ_SIZE];
    
     while (true) {
+        auto start_batch = std::chrono::high_resolution_clock::now();
+
         // Retrieve data from the queue
         queue.get(buffer);
 
         // Split up into samples
         for (size_t sample_index = 0; sample_index < READ_SIZE; sample_index += FFT_SIZE) {
+            auto start_sample = std::chrono::high_resolution_clock::now();
+
             // Preprocess each value in the sample
             for (size_t value_index = 0; value_index < FFT_SIZE; ++value_index) {
                 // Convert unsigned byte to float and apply quantization
@@ -45,30 +57,42 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue) {
             }
             // Invoke the EdgeTPU interpreter for inference
             interpreter.invoke();
-            std::cerr << "Completed." << std::endl;
+
+            auto end_sample = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> elapsed_sample = end_sample - start_sample;
+            std::cerr << std::fixed << "Time taken for sample: " << elapsed_sample.count() << " seconds" << std::endl;
+
+            // std::cerr << "# Completed." << std::endl;
         }
+
+        auto end_batch = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_batch = end_batch - start_batch;
+        std::cerr << std::fixed << "Time taken for batch: " << elapsed_batch.count() << " seconds" << std::endl;
     }
 }
 
-int main() {
-    const std::string model_path = MODEL_NAME + "_edgetpu.tflite";
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <model_name>" << std::endl;
+        return 1;
+    }
+    const std::string model_name = argv[1];
 
     // Check if the EdgeTPU TensorFlow Lite model exists
-    if (!std::filesystem::exists(model_path)) {
+    // if (!std::filesystem::exists(model_name + MODEL_SUFFIX)) {
+        // HACK: always build the model
         std::stringstream command;
-
-        // Create a new model
-        command << "python3 minimum_model.py " << FFT_SIZE << " " << MODEL_NAME;
+        command << "python3 " << model_name << ".py " << FFT_SIZE << " " << model_name;
         if (std::system(command.str().c_str()) < 0) {
             throw std::runtime_error("Error: Failed to build model.");
         }
-    }
+    // }
 
     // Create a circular buffer to hold RTL-SDR data
     CircularBuffer queue(READ_SIZE, 1000);
 
     // Initialize EdgeTPUInterpreter with model path
-    EdgeTPUInterpreter interpreter(model_path);
+    EdgeTPUInterpreter interpreter(model_name + MODEL_SUFFIX);
 
     // Start a thread to process data on the EdgeTPU
     std::thread tpu_thread([&interpreter, &queue]() {
