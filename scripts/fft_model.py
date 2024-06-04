@@ -5,17 +5,23 @@ import argparse
 import subprocess
 import tensorflow as tf
 
+# Constants for easier list access
+REAL_PART, EVEN_PART = 0, 0
+IMAG_PART, ODD_PART = 1, 1
+
 class FFT:
-    def __init__(self, size: int) -> None:
+    def __init__(self, size: int, samples: int) -> None:
         """
         Initialize an FFT (Fast Fourier Transform) instance with a specified size.
         Use the `compute` method compute the FFT using the Cooley-Tukey algorithm.
 
         Args:
             size (int): The size of the FFT, which must be a power of 2.
+            samples (int): The number of samples in the input tensor for batching.
         """
         # Properties of the FFT
-        self.size = size                   # The size of the input
+        self.size = size                   # The size of fft
+        self.samples = samples             # The number of samples in the input tensor
         self.stages = int(math.log2(size)) # The number of butterfly stages
 
         # Generate bit-reversed indices for the FFT stages
@@ -104,50 +110,55 @@ class FFT:
         # Return the list of twiddle factor tensors for each FFT stage
         return twiddle_factors
 
-    def butterfly(self, tensor: tf.Tensor, stage: int) -> tf.Tensor:
+    def butterfly(self, real: tf.Tensor, imag: tf.Tensor, stage: int) -> tuple[tf.Tensor, tf.Tensor]:
         """
-        Perform a butterfly operation on a tensor for Fast Fourier Transform (FFT).
+        Performs butterfly operations for the Fast Fourier Transform (FFT).
 
         This method applies the butterfly operation, crucial for FFT algorithms,
         by splitting the input tensor into 'even' and 'odd' components and then
         recombining them with applied twiddle factors for the given FFT stage.
 
         Args:
-            tensor (tf.Tensor): A 3D TensorFlow tensor with the shape (2, A, B).
+            real (tf.Tensor): A TensorFlow tensor with the real component of the shape (SAMPLES, A, B).
+            imag (tf.Tensor): A TensorFlow tensor with the imaginary component of the shape (SAMPLES, A, B).
             stage (int): The current FFT stage, used to select the appropriate twiddle factors.
 
         Returns:
-            tf.Tensor: A TensorFlow tensor of the same shape as `tensor`, with the butterfly operation applied.
-        
+            tuple[tf.Tensor, tf.Tensor]: Two TensorFlow tensors (real and imaginary) of the same shape
+            as the input tensors, with the butterfly operation applied.
+
         Description of the input tensor's shape:
-        - First dimension of size 2 represents real and imaginary parts of complex numbers.
-        - A denotes the number of parallel butterfly operations.
-        - B is the size of each butterfly operation.
-        - A * B should equal `self.size`, the total number of elements in the input tensor.
+        - SAMPLES: The number of samples to be batched.
+        - A: The number of parallel butterfly operations.
+        - B: The size of each butterfly operation.
+        - A * B should equal `self.size`, the size of the FFT.
         """
         # Visualization of the butterfly operation: https://tinyurl.com/radix2-butterfly, where:
         #   a represents the even part of the input
         #   b represents the odd part of the input
         #   Wn represents the twiddle factors
 
-        # Split the input tensor into its even (a) and odd (b) components
-        evens, odds = tf.split(tensor, 2, axis=2)
+        # Split the tensors into even and odd components
+        real = tf.split(real, 2, axis=2) # Re, Ro
+        imag = tf.split(imag, 2, axis=2) # Ie, Io
 
-        # Apply twiddle factors (Wn) to odds (b) using complex multiplication:
-        #   Calculate real component: (a * c) − (b * d)
-        #   Calculate imaginary component: (a * d) + (b * c)
-        #   Here, odds corresponds to (a, b) and self.twiddles[stage] corresponds to (c, d)
-        # Additional information:
-        #   The [0] index refers to the real component, and the [1] index refers to the imaginary component
-        #   Twiddle factors are complex numbers that rotate the odds in the complex plane
-        #   Broadcasting allows this operation to efficiently apply the twiddle factors to multiple tensors
-        odds = tf.stack([ 
-            odds[0] * self.twiddles[stage][0] - odds[1] * self.twiddles[stage][1], # Real part
-            odds[0] * self.twiddles[stage][1] + odds[1] * self.twiddles[stage][0]  # Imag part
-        ])
+        # Store the odd components
+        real_odd = real[ODD_PART] # Ro
+        imag_odd = imag[ODD_PART] # Io
+
+        # Apply twiddle factors (Wn) to odds (b) using complex multiplication
+        # Twiddle factors are complex numbers that rotate the odd components in the complex plane
+        # Broadcasting allows this operation to efficiently apply the twiddle factors to multiple tensors
+
+        # Calculate real component: (Ro * Tr) − (Io * Ti)
+        real[ODD_PART] = real_odd * self.twiddles[stage][REAL_PART] - imag_odd * self.twiddles[stage][IMAG_PART]
+
+        # Calculate imaginary component: (Ro * Ti) + (Io * Tr)
+        imag[ODD_PART] = real_odd * self.twiddles[stage][IMAG_PART] + imag_odd * self.twiddles[stage][REAL_PART]
 
         # The final butterfly operation combines the evens with the twiddled odds
-        return tf.concat([evens + odds, evens - odds], axis=2)
+        return tf.concat([real[EVEN_PART] + real[ODD_PART], real[EVEN_PART] - real[ODD_PART]], axis=2), \
+               tf.concat([imag[EVEN_PART] + imag[ODD_PART], imag[EVEN_PART] - imag[ODD_PART]], axis=2)
 
     @tf.function
     def compute(self, tensor: tf.Tensor) -> tf.Tensor:
@@ -155,25 +166,29 @@ class FFT:
         Compute the Fast Fourier Transform (FFT) of the input tensor using the Cooley-Tukey algorithm.
 
         Args:
-            tensor (tf.Tensor): Input tensor with shape (`self.size`, 2), where `self.size` is the number of
-                                complex numbers, represented as pairs of floats (real, imaginary).
+            tensor (tf.Tensor): Input tensor with shape (`self.samples`, `self.size`, 2), where `self.samples` is the number
+                                of samples for batching and `self.size` is the size of the FFT, representing the number of
+                                complex numbers, each as a pair of floats (real, imaginary).
 
         Returns:
-            tf.Tensor: Transformed tensor containing the FFT result with the same shape (`self.size`, 2).
+            tf.Tensor: Transformed tensor containing the FFT result with the same shape as the input tensor.
         """
-        # Transpose the tensor to group the real and imaginary parts together
-        # This allows separate (broadcasted) calculations on the real or imaginary parts
-        tensor = tf.transpose(tensor)
+        # Spit tensor into the complex parts, unpacking directly doesn't work
+        complex_parts = tf.split(tensor, 2, axis=2)
+        real = complex_parts[REAL_PART]
+        imag = complex_parts[IMAG_PART]
 
-        # Split the tensor into a list of complex numbers
-        tensor_list = tf.split(tensor, self.size, axis=1)
+        # Remove the useless dimension, unstack isn't supported
+        real = tf.squeeze(real, axis=2)
+        imag = tf.squeeze(imag, axis=2)
+
+        # Split the tensors into a list of complex numbers
+        real_list = tf.split(real, self.size, axis=1)
+        imag_list = tf.split(imag, self.size, axis=1)
 
         # Reorder the complex numbers according to the bit-reversal indices and concatenate them back together
-        tensor = tf.concat([tensor_list[i] for i in self.bit_rev_indices], axis=1)
-
-        # Alternative approach using tf.stack (generates more instructions, but uses less memory)
-        # TODO: Compare the performance
-        # tensor = tf.stack([tensor[i] for i in self.bit_rev_indices], axis=1)
+        real = tf.concat([real_list[i] for i in self.bit_rev_indices], axis=1)
+        imag = tf.concat([imag_list[i] for i in self.bit_rev_indices], axis=1)
 
         # Apply Cooley-Tukey FFT algorithm using butterfly operations
         for stage in range(self.stages):
@@ -182,17 +197,18 @@ class FFT:
             butterfly_count = self.size // butterfly_size
 
             # Reshape the tensor to prepare for butterfly operations
-            tensor = tf.reshape(tensor, [2, butterfly_count, butterfly_size])
-            
+            real = tf.reshape(real, [self.samples, butterfly_count, butterfly_size])
+            imag = tf.reshape(imag, [self.samples, butterfly_count, butterfly_size])
+
             # Perform butterfly operations for the current stage
-            tensor = self.butterfly(tensor, stage)
+            real, imag = self.butterfly(real, imag, stage)
 
-        # Reshape back to the original shape
-        tensor = tf.reshape(tensor, [2, self.size])
+        # Reshape the parts back to their original shape
+        real = tf.reshape(real, [self.samples, self.size])
+        imag = tf.reshape(imag, [self.samples, self.size])
 
-        # Transpose the tensor to return a tensor of complex numbers, 
-        # where each complex number consists of a pair of floats, with the FFT applied
-        return tf.transpose(tensor)
+        # Combine the complex parts to return the original shape, with the FFT applied 
+        return tf.stack([real, imag], axis=2)
 
     def concrete_function(self) -> tf.types.experimental.ConcreteFunction:
         """
@@ -203,7 +219,7 @@ class FFT:
         """
         # Create a trace of the function directly
         concrete_func = self.compute.get_concrete_function(
-            tf.TensorSpec(shape=(self.size, 2), dtype=tf.float32)
+            tf.TensorSpec(shape=(self.samples, self.size, 2), dtype=tf.float32)
         )
         return concrete_func
 
@@ -215,7 +231,7 @@ class FFT:
             Generator[tf.Tensor, None, None]: A generator yielding random tensors.
         """
         for _ in range(500):
-            yield [tf.random.uniform(shape=[self.size, 2], minval=-1, maxval=1, dtype=tf.float32)]
+            yield [tf.random.uniform(shape=[self.samples, self.size, 2], minval=-1, maxval=1, dtype=tf.float32)]
 
     def export_model(self, model_name: str) -> None:
         """
@@ -262,7 +278,8 @@ def parse_args() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments.
     """
     parser = argparse.ArgumentParser(description="Build and compile an FFT (Fast Fourier Transform) TensorFlow Lite model optimized for the Coral Edge TPU.")
-    parser.add_argument("size", type=int, help="Input size of the FFT.")
+    parser.add_argument("size", type=int, help=" The size of the FFT, which must be a power of 2.")
+    parser.add_argument("samples", type=int, help="The number of samples in the input tensor.")
     parser.add_argument("name", type=str, help="Name of the created TensorFlow Lite model.")
     parser.add_argument("--outdir", type=str, default=None, help="Location to save the output model. Default is current directory.")
 
@@ -279,7 +296,7 @@ def main() -> None:
         os.chdir(args.outdir)
 
     # Create a FFT instance and export the TensorFlow Lite model
-    fft_model = FFT(args.size)
+    fft_model = FFT(args.size, args.samples)
     fft_model.export_model(args.name)
 
 if __name__ == "__main__":

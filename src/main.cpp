@@ -45,25 +45,14 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue) {
         // Retrieve data from the queue
         queue.get(buffer);
 
-        // Split up into samples
-        for (size_t sample_index = 0; sample_index < READ_SIZE; sample_index += FFT_SIZE) {
-            auto start_sample = std::chrono::high_resolution_clock::now();
-
-            // Preprocess each value in the sample
-            for (size_t value_index = 0; value_index < FFT_SIZE; ++value_index) {
-                // Convert unsigned byte to float and apply quantization
-                float value = (buffer[sample_index + value_index] + zero_offset) * scale;
-                input_tensor[value_index] = static_cast<int8_t>((value / input_quant.scale) + input_quant.zero_point);
-            }
-            // Invoke the EdgeTPU interpreter for inference
-            interpreter.invoke();
-
-            auto end_sample = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsed_sample = end_sample - start_sample;
-            std::cerr << std::fixed << "Time taken for sample: " << elapsed_sample.count() << " seconds" << std::endl;
-
-            // std::cerr << "# Completed." << std::endl;
+        // Preprocess each value in the buffer
+        for (size_t index = 0; index < READ_SIZE; ++index) {
+            // Convert unsigned byte to float and apply quantization
+            float value = (buffer[index] + zero_offset) * scale;
+            input_tensor[index] = static_cast<int8_t>((value / input_quant.scale) + input_quant.zero_point);
         }
+        // Invoke the EdgeTPU interpreter for inference
+        interpreter.invoke();
 
         auto end_batch = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_batch = end_batch - start_batch;
@@ -82,7 +71,10 @@ int main(int argc, char* argv[]) {
     // if (!std::filesystem::exists(model_name + MODEL_SUFFIX)) {
         // HACK: always build the model
         std::stringstream command;
-        command << "python3 " << model_name << ".py " << FFT_SIZE << " " << model_name;
+        command << "python3 " << model_name << ".py"    // The script to use 
+                << " " << FFT_SIZE                      // Size of the FFT
+                << " " << READ_SIZE / (2 * FFT_SIZE)    // Number of samples
+                << " " << model_name;                   // Name for the created model
         if (std::system(command.str().c_str()) < 0) {
             throw std::runtime_error("Error: Failed to build model.");
         }
