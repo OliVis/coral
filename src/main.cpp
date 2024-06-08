@@ -10,8 +10,6 @@
 #include "coral/rtlsdr.h"
 #include "coral/buffer.h"
 
-const size_t FFT_SIZE = 1024;
-const size_t READ_SIZE = 16384;
 const std::string MODEL_SUFFIX = "_edgetpu.tflite";
 
 // Callback function to handle received data from the RTL-SDR
@@ -29,7 +27,7 @@ void callback(uint8_t* buf, uint32_t len, void* ctx) {
     queue->put(buf);
 }
 
-void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue) {
+void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const size_t read_size) {
     const QuantizationParams input_quant = interpreter.input_tensor_info().quantization;
     int8_t* input_tensor = interpreter.input_tensor_info().data_ptr;
 
@@ -37,7 +35,7 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue) {
     const float scale = 1.0f / 128.0f;
     const float zero_offset = -127.4f;
 
-    uint8_t buffer[READ_SIZE];
+    uint8_t buffer[read_size];
    
     while (true) {
         auto start_batch = std::chrono::high_resolution_clock::now();
@@ -46,7 +44,7 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue) {
         queue.get(buffer);
 
         // Preprocess each value in the buffer
-        for (size_t index = 0; index < READ_SIZE; ++index) {
+        for (size_t index = 0; index < read_size; ++index) {
             // Convert unsigned byte to float and apply quantization
             float value = (buffer[index] + zero_offset) * scale;
             input_tensor[index] = static_cast<int8_t>((value / input_quant.scale) + input_quant.zero_point);
@@ -61,34 +59,57 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <model_name>" << std::endl;
+    // Default model script to use
+    std::string model_script = "fft_model.py";
+
+    // Check if the correct number of arguments is provided
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <fft_size> <samples> [model_script]" << std::endl;
+        std::cerr << " - fft_size: The size of the FFT, must be a power of 2." << std::endl;
+        std::cerr << " - samples: The number of samples to batch process." << std::endl;
+        std::cerr << " - model_script: (optional) The Python script used for model creation. Default is 'fft_model.py'." << std::endl;
+        std::cerr << std::endl;
+        std::cerr << " '2 * fft_size * samples' bytes are read from the USB per callback." << std::endl;
+        std::cerr << " That number must be a multiple of 256 and is recommended to be a multiple of 16384 (USB urb size)." << std::endl;
         return 1;
     }
-    const std::string model_name = argv[1];
+
+    // Use different model script if provided
+    if (argc >= 4)
+        model_script = argv[3];
+
+    // Parse the command line arguments
+    const int fft_size = std::stoi(argv[1]);
+    const int samples = std::stoi(argv[2]);
+
+    // Calculate the USB read size
+    const size_t read_size = 2 * fft_size * samples;
+
+    // Create a unique model name based on the FFT size and number of samples
+    const std::string model_name = "fft_model_" + std::to_string(fft_size) + "_" + std::to_string(samples);
 
     // Check if the EdgeTPU TensorFlow Lite model exists
-    // if (!std::filesystem::exists(model_name + MODEL_SUFFIX)) {
-        // HACK: always build the model
+    if (!std::filesystem::exists(model_name + MODEL_SUFFIX)) {
+        // Create command to execute Python script for model creation
         std::stringstream command;
-        command << "python3 " << model_name << ".py"    // The script to use 
-                << " " << FFT_SIZE                      // Size of the FFT
-                << " " << READ_SIZE / (2 * FFT_SIZE)    // Number of samples
-                << " " << model_name;                   // Name for the created model
+        command << "python3 " << model_script  // The script to create the model
+                << " " << fft_size             // Size of the FFT
+                << " " << samples              // Number of samples
+                << " " << model_name;          // Name for the model to be created
         if (std::system(command.str().c_str()) < 0) {
             throw std::runtime_error("Error: Failed to build model.");
         }
-    // }
+    }
 
     // Create a circular buffer to hold RTL-SDR data
-    CircularBuffer queue(READ_SIZE, 1000);
+    CircularBuffer queue(read_size, 1000);
 
     // Initialize EdgeTPUInterpreter with model path
     EdgeTPUInterpreter interpreter(model_name + MODEL_SUFFIX);
 
     // Start a thread to process data on the EdgeTPU
-    std::thread tpu_thread([&interpreter, &queue]() {
-        process(interpreter, queue);
+    std::thread tpu_thread([&interpreter, &queue, read_size]() {
+        process(interpreter, queue, read_size);
     });
 
     // Configure RTL-SDR settings
@@ -98,8 +119,8 @@ int main(int argc, char* argv[]) {
     sdr.set_gain(6.0);               // 6dB
 
     // Start a thread to read data asynchronously from RTL-SDR
-    std::thread sdr_thread([&sdr, &queue]() {
-        sdr.read_async(callback, &queue, READ_SIZE);
+    std::thread sdr_thread([&sdr, &queue, read_size]() {
+        sdr.read_async(callback, &queue, read_size);
     });
 
     // Wait for threads to finish execution

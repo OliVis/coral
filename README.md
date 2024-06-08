@@ -39,4 +39,12 @@ make -j$(nproc)
 Use the `-j$(nproc)` option to use multiple processing units and speed up the build process.
 
 ## Usage
-***TODO***
+```bash
+ ./coral <fft_size> <samples> [model_script]
+```
+- `fft_size`: The size of the FFT, must be a power of 2.
+- `samples`: The number of samples to batch process.
+- `model_script`: (optional) The Python script used for model creation. Default is `fft_model.py`.
+
+`2 * fft_size * samples` bytes are read from the USB per callback.
+That number must be a multiple of 256 and is recommended to be a multiple of 16384 (USB urb size) for optimal performance.
