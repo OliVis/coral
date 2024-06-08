@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.18)
 project(coral C CXX)
 
+include(FetchContent)
+
 set(CMAKE_CXX_STANDARD 17)
+
+set(TENSORFLOW_VERSION v2.16.1)
 
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
@@ -10,7 +14,14 @@ find_package(Threads REQUIRED)
 find_library(LIBEDGETPU edgetpu REQUIRED)
 find_library(LIBRTLSDR rtlsdr REQUIRED)
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/tensorflow/tensorflow/lite EXCLUDE_FROM_ALL)
+FetchContent_Declare(
+  tensorflow
+  GIT_REPOSITORY https://github.com/tensorflow/tensorflow.git
+  GIT_TAG ${TENSORFLOW_VERSION}
+  SOURCE_SUBDIR tensorflow/lite
+)
+
+FetchContent_MakeAvailable(tensorflow)
 
 add_executable(coral)
 

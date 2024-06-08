@@ -25,20 +25,14 @@ git clone https://github.com/OliVis/coral.git
 cd coral
 ```
 
-3. Clone the TensorFlow repository and checkout the specific version (2.16.1):
-```bash
-git clone https://github.com/tensorflow/tensorflow.git
-git -C tensorflow checkout v2.16.1
-```
-
-4. Create a build directory and run CMake to configure the project:
+3. Create a build directory and run CMake to configure the project. Make sure the TensorFlow version matches the installed Python TensorFlow version.
 ```bash
 mkdir build
 cd build
 cmake ..
 ```
 
-5. Build the executable using make:
+4. Build the executable using make:
 ```bash
 make -j$(nproc)
 ```
