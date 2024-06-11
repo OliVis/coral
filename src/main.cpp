@@ -6,9 +6,13 @@
 #include <sstream>
 #include <filesystem>
 #include <chrono>
+#include <vector>
+#include <readerwritercircularbuffer.h>
 #include "coral/interpreter.h"
 #include "coral/rtlsdr.h"
-#include "coral/buffer.h"
+
+// Type alias for the circular buffer that holds the data
+using CircularBuffer = moodycamel::BlockingReaderWriterCircularBuffer<std::vector<uint8_t>>;
 
 const std::string MODEL_SUFFIX = "_edgetpu.tflite";
 
@@ -23,8 +27,12 @@ void callback(uint8_t* buf, uint32_t len, void* ctx) {
     last_callback = current_time;
     std::cerr << std::fixed << "Time between callbacks: " << elapsed_callback.count() << " seconds" << std::endl;
 
-    // Place sample in the queue
-    queue->put(buf);
+    // Create a movable object to hold the buffer data
+    std::vector<uint8_t> data(buf, buf + len);
+
+    // Place the data in the queue
+    if (!queue->try_enqueue(std::move(data)))
+        std::cerr << "# Queue full, sample dropped!" << std::endl;
 }
 
 void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const size_t read_size) {
@@ -35,18 +43,24 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const size_
     const float scale = 1.0f / 128.0f;
     const float zero_offset = -127.4f;
 
-    uint8_t buffer[read_size];
+    std::vector<uint8_t> data;
    
     while (true) {
         auto start_batch = std::chrono::high_resolution_clock::now();
 
-        // Retrieve data from the queue
-        queue.get(buffer);
+        // Retrieve data from the queue when available
+        queue.wait_dequeue(data);
+
+        // Ensure that the correct number of bytes are read
+        if (data.size() < read_size) {
+            std::cerr << "# Lost bytes, got less data than expected." << std::endl;
+            continue;
+        }
 
         // Preprocess each value in the buffer
         for (size_t index = 0; index < read_size; ++index) {
             // Convert unsigned byte to float and apply quantization
-            float value = (buffer[index] + zero_offset) * scale;
+            float value = (data[index] + zero_offset) * scale;
             input_tensor[index] = static_cast<int8_t>((value / input_quant.scale) + input_quant.zero_point);
         }
         // Invoke the EdgeTPU interpreter for inference
@@ -102,7 +116,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Create a circular buffer to hold RTL-SDR data
-    CircularBuffer queue(read_size, 1000);
+    CircularBuffer queue(1000);
 
     // Initialize EdgeTPUInterpreter with model path
     EdgeTPUInterpreter interpreter(model_name + MODEL_SUFFIX);

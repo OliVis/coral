@@ -15,6 +15,14 @@ find_library(LIBEDGETPU edgetpu REQUIRED)
 find_library(LIBRTLSDR rtlsdr REQUIRED)
 
 FetchContent_Declare(
+  readerwriterqueue
+  GIT_REPOSITORY https://github.com/cameron314/readerwriterqueue
+  GIT_TAG master
+)
+
+FetchContent_MakeAvailable(readerwriterqueue)
+
+FetchContent_Declare(
   tensorflow
   GIT_REPOSITORY https://github.com/tensorflow/tensorflow.git
   GIT_TAG ${TENSORFLOW_VERSION}
@@ -29,7 +37,6 @@ target_sources(coral PRIVATE
   ${SOURCE_DIR}/main.cpp
   ${SOURCE_DIR}/interpreter.cpp
   ${SOURCE_DIR}/rtlsdr.cpp
-  ${SOURCE_DIR}/buffer.cpp
 )
 
 target_include_directories(coral PRIVATE ${INCLUDE_DIR})
@@ -38,6 +45,7 @@ target_link_libraries(coral PRIVATE
   ${CMAKE_THREAD_LIBS_INIT}
   ${LIBEDGETPU}
   ${LIBRTLSDR}
+  readerwriterqueue
   tensorflow-lite
 )
 
