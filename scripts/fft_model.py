@@ -1,4 +1,5 @@
 import os
+import sys
 import math
 from typing import Generator
 import argparse
@@ -251,8 +252,8 @@ class FFT:
         converter.inference_output_type = tf.int8
 
         # Convert the TensorFlow model to TensorFlow Lite
+        print("Converting to TFLite format.", file=sys.stderr)
         tflite_model = converter.convert()
-        print("Conversion to TFLite format completed.")
 
         # Append the TensorFlow Lite extension to the model name
         file_name = model_name + ".tflite"
@@ -260,11 +261,17 @@ class FFT:
         # Save the converted TensorFlow Lite model
         with open(file_name, "wb") as file:
             file.write(tflite_model)
-        print(f"Model saved to {file_name}.")
+        print(f"Model saved to {file_name}, starting EdgeTPU compilation.", file=sys.stderr)
 
         # Compile the TensorFlow Lite model for the Coral Edge TPU. 
         # The '-s' flag generates a summary of the compilation.
-        result = subprocess.run(["edgetpu_compiler", "-s", file_name])
+        result = subprocess.run(["edgetpu_compiler", "-s", file_name],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT,
+                                text=True)
+
+        # Print the captured output to stderr
+        print(result.stdout, file=sys.stderr)
 
         # Verify the compilation process. A non-zero return code indicates an error.
         if result.returncode != 0:
