@@ -26,7 +26,7 @@ struct ProgramProperties {
     std::string model_script;
     std::string output_file;
     int output_samples;
-    std::string sample_file;
+    std::string samples_file;
 };
 
 // Callback function to handle received data from the RTL-SDR
@@ -69,8 +69,8 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const Progr
     // Open output file streams
     std::ofstream ofs(properties.output_file, std::ios::binary);
     std::ofstream sfs;
-    if (!properties.sample_file.empty()) {
-        sfs.open(properties.sample_file, std::ios::binary);
+    if (!properties.samples_file.empty()) {
+        sfs.open(properties.samples_file, std::ios::binary);
     }
 
     int samples_written = 0;
@@ -130,7 +130,7 @@ void usage(const char* program_name) {
               << "  -o <output_file>    File to store the processed samples.\n\n"
               << "Optional arguments:\n"
               << "  -n <num_output_samples>  Number of output samples (default: run indefinitely).\n"
-              << "  -d <sample_file>         File to store the raw SDR samples.\n"
+              << "  -d <samples_file>        File to store the raw SDR samples.\n"
               << "  -m <model_script>        Python script used for model creation (default: 'fft_model.py').\n\n"
               << "(*) '2 * fft_size * samples' bytes are read from the SDR per callback.\n"
               << "    This must be a multiple of 256, and it's recommended to use multiples of 16,384 (USB URB size)."
@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
                 properties.output_samples = std::stoi(optarg);
                 break;
             case 'd':
-                properties.sample_file = optarg;
+                properties.samples_file = optarg;
                 break;
             case 'm':
                 properties.model_script = optarg;
