@@ -26,6 +26,7 @@ struct ProgramProperties {
     std::string model_script;
     std::string output_file;
     int output_samples;
+    std::string sample_file;
 };
 
 // Callback function to handle received data from the RTL-SDR
@@ -37,14 +38,15 @@ void callback(uint8_t* buf, uint32_t len, void* ctx) {
     auto current_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_callback = current_time - last_callback;
     last_callback = current_time;
-    std::cerr << std::fixed << "Time between callbacks: " << elapsed_callback.count() << " seconds" << std::endl;
+    std::cout << std::fixed << "< " << elapsed_callback.count() << std::endl;
 
     // Create a movable object to hold the buffer data
     std::vector<uint8_t> data(buf, buf + len);
 
     // Place the data in the queue
-    if (!queue->try_enqueue(std::move(data)))
-        std::cerr << "# Queue full, sample dropped!" << std::endl;
+    if (!queue->try_enqueue(std::move(data))) {
+        std::cerr << "! Queue full, sample dropped!" << std::endl;
+    }
 }
 
 void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const ProgramProperties properties) {
@@ -64,19 +66,29 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const Progr
     std::vector<uint8_t> input_data(properties.read_size);
     float* output_data = new float[properties.read_size];
 
+    // Open output file streams
     std::ofstream ofs(properties.output_file, std::ios::binary);
+    std::ofstream sfs;
+    if (!properties.sample_file.empty()) {
+        sfs.open(properties.sample_file, std::ios::binary);
+    }
 
     int samples_written = 0;
     while (properties.output_samples == -1 || samples_written < properties.output_samples) {
-        auto start_batch = std::chrono::high_resolution_clock::now();
-
         // Retrieve data from the queue when available
         queue.wait_dequeue(input_data);
 
+        auto start_batch = std::chrono::high_resolution_clock::now();
+
         // Ensure that the correct number of bytes are read
         if (input_data.size() < properties.read_size) {
-            std::cerr << "# Lost bytes, got less data than expected." << std::endl;
+            std::cerr << "! Lost bytes, got less data than expected." << std::endl;
             continue;
+        }
+
+        // Write the raw SDR samples to the input file
+        if (sfs.is_open()) {
+            sfs.write(reinterpret_cast<const char*>(input_data.data()), input_data.size());
         }
 
         // Preprocess each value in the buffer
@@ -93,30 +105,36 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const Progr
             // Dequantize the output value
             output_data[index] = (output_tensor[index] - output_quant.zero_point) * output_quant.scale;
         }
-        // Write the buffer to file
-        ofs.write(reinterpret_cast<char*>(output_data), properties.read_size * sizeof(float));
+        // Write the processed samples buffer to the output file
+        ofs.write(reinterpret_cast<const char*>(output_data), properties.read_size * sizeof(float));
 
         auto end_batch = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_batch = end_batch - start_batch;
-        std::cerr << std::fixed << "Time taken for batch: " << elapsed_batch.count() << " seconds" << std::endl;
+        std::cout << std::fixed << "> " << elapsed_batch.count() << std::endl;
 
         samples_written += properties.samples;
     }
     // Clean up
-    ofs.close();
     delete[] output_data;
+    ofs.close();
+    if (sfs.is_open()) {
+        sfs.close();
+    }
 }
 
 void usage(const char* program_name) {
-    std::cerr << "Usage: " << program_name << " -f <fft_size> -s <samples> -o <output_file> [-n <num_output_samples>] [-m <model_script>]" << std::endl;
-    std::cerr << " - fft_size: The size of the FFT, must be a power of 2." << std::endl;
-    std::cerr << " - samples: The number of samples to batch process." << std::endl;
-    std::cerr << " - output_file: The binary file to output the results to." << std::endl;
-    std::cerr << " - output_samples: (optional) The number of samples in the output file. If not provided, the program will keep running indefinitely." << std::endl;
-    std::cerr << " - model_script: (optional) The Python script used for model creation. Default is 'fft_model.py'." << std::endl;
-    std::cerr << std::endl;
-    std::cerr << " '2 * fft_size * samples' bytes are read from the USB per callback." << std::endl;
-    std::cerr << " That number must be a multiple of 256 and is recommended to be a multiple of 16384 (USB urb size)." << std::endl;
+    std::cerr << "Usage: " << program_name << " -f <fft_size> -s <samples> -o <output_file> [options]\n\n"
+              << "Required arguments:\n"
+              << "  -f <fft_size>       FFT size (must be a power of 2).\n"
+              << "  -s <samples>        Number of samples to batch process (*).\n"
+              << "  -o <output_file>    File to store the processed samples.\n\n"
+              << "Optional arguments:\n"
+              << "  -n <num_output_samples>  Number of output samples (default: run indefinitely).\n"
+              << "  -d <sample_file>         File to store the raw SDR samples.\n"
+              << "  -m <model_script>        Python script used for model creation (default: 'fft_model.py').\n\n"
+              << "(*) '2 * fft_size * samples' bytes are read from the SDR per callback.\n"
+              << "    This must be a multiple of 256, and it's recommended to use multiples of 16,384 (USB URB size)."
+              << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -127,7 +145,7 @@ int main(int argc, char* argv[]) {
     properties.output_samples = -1;
 
     char opt;
-    while ((opt = getopt(argc, argv, "f:s:o:m:n:")) != -1) {
+    while ((opt = getopt(argc, argv, "f:s:o:n:d:m:")) != -1) {
         switch (opt) {
             case 'f':
                 properties.fft_size = std::stoi(optarg);
@@ -140,6 +158,9 @@ int main(int argc, char* argv[]) {
                 break;
             case 'n':
                 properties.output_samples = std::stoi(optarg);
+                break;
+            case 'd':
+                properties.sample_file = optarg;
                 break;
             case 'm':
                 properties.model_script = optarg;
