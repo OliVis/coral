@@ -11,23 +11,23 @@ REAL_PART, EVEN_PART = 0, 0
 IMAG_PART, ODD_PART = 1, 1
 
 class FFT:
-    def __init__(self, size: int, samples: int) -> None:
+    def __init__(self, fft_size: int, batch_size: int) -> None:
         """
         Initialize an FFT (Fast Fourier Transform) instance with a specified size.
         Use the `compute` method compute the FFT using the Cooley-Tukey algorithm.
 
         Args:
-            size (int): The size of the FFT, which must be a power of 2.
-            samples (int): The number of samples in the input tensor for batching.
+            fft_size (int): The size of the FFT, which must be a power of 2.
+            batch_size (int): The number of FFTs to compute per batch.
         """
         # Properties of the FFT
-        self.size = size                   # The size of fft
-        self.samples = samples             # The number of samples in the input tensor
-        self.stages = int(math.log2(size)) # The number of butterfly stages
+        self.fft_size = fft_size               # The size of fft
+        self.batch_size = batch_size           # The number of FFTs per batch
+        self.stages = int(math.log2(fft_size)) # The number of butterfly stages
 
         # Generate bit-reversed indices for the FFT stages
         # These indices are used to reorder the input for the FFT computation
-        self.bit_rev_indices = self.bit_rev_list(size)
+        self.bit_rev_indices = self.bit_rev_list(fft_size)
 
         # Create twiddle factors (complex roots of unity) for each FFT stage
         self.twiddles = self.create_twiddles(self.stages)
@@ -115,13 +115,12 @@ class FFT:
         """
         Performs butterfly operations for the Fast Fourier Transform (FFT).
 
-        This method applies the butterfly operation, crucial for FFT algorithms,
-        by splitting the input tensor into 'even' and 'odd' components and then
-        recombining them with applied twiddle factors for the given FFT stage.
+        This method applies the butterfly operation by splitting the input tensor into 'even' and 'odd' components
+        and then recombining them with applied twiddle factors for the given FFT stage.
 
         Args:
-            real (tf.Tensor): A TensorFlow tensor with the real component of the shape (SAMPLES, A, B).
-            imag (tf.Tensor): A TensorFlow tensor with the imaginary component of the shape (SAMPLES, A, B).
+            real (tf.Tensor): A TensorFlow tensor with the real component of the shape (batch_size, A, B).
+            imag (tf.Tensor): A TensorFlow tensor with the imaginary component of the shape (batch_size, A, B).
             stage (int): The current FFT stage, used to select the appropriate twiddle factors.
 
         Returns:
@@ -129,10 +128,10 @@ class FFT:
             as the input tensors, with the butterfly operation applied.
 
         Description of the input tensor's shape:
-        - SAMPLES: The number of samples to be batched.
+        - batch_size: The number of FFTs to be batched.
         - A: The number of parallel butterfly operations.
         - B: The size of each butterfly operation.
-        - A * B should equal `self.size`, the size of the FFT.
+        - A * B should be equal to the size of the FFT.
         """
         # Visualization of the butterfly operation: https://tinyurl.com/radix2-butterfly, where:
         #   a represents the even part of the input
@@ -167,9 +166,8 @@ class FFT:
         Compute the Fast Fourier Transform (FFT) of the input tensor using the Cooley-Tukey algorithm.
 
         Args:
-            tensor (tf.Tensor): Input tensor with shape (`self.samples`, `self.size`, 2), where `self.samples` is the number
-                                of samples for batching and `self.size` is the size of the FFT, representing the number of
-                                complex numbers, each as a pair of floats (real, imaginary).
+            tensor (tf.Tensor): Input tensor with shape (`self.batch_size`, `self.fft_size`, 2),
+                                The last dimension is a pair of floats representing a complex number (real, imaginary).
 
         Returns:
             tf.Tensor: Transformed tensor containing the FFT result with the same shape as the input tensor.
@@ -179,13 +177,13 @@ class FFT:
         real = complex_parts[REAL_PART]
         imag = complex_parts[IMAG_PART]
 
-        # Remove the useless dimension, unstack isn't supported
+        # Remove the empty dimension, unstack isn't supported
         real = tf.squeeze(real, axis=2)
         imag = tf.squeeze(imag, axis=2)
 
         # Split the tensors into a list of complex numbers
-        real_list = tf.split(real, self.size, axis=1)
-        imag_list = tf.split(imag, self.size, axis=1)
+        real_list = tf.split(real, self.fft_size, axis=1)
+        imag_list = tf.split(imag, self.fft_size, axis=1)
 
         # Reorder the complex numbers according to the bit-reversal indices and concatenate them back together
         real = tf.concat([real_list[i] for i in self.bit_rev_indices], axis=1)
@@ -195,18 +193,18 @@ class FFT:
         for stage in range(self.stages):
             # Calculate butterfly size and count based on the current stage
             butterfly_size = 2 ** (stage + 1)
-            butterfly_count = self.size // butterfly_size
+            butterfly_count = self.fft_size // butterfly_size
 
             # Reshape the tensor to prepare for butterfly operations
-            real = tf.reshape(real, [self.samples, butterfly_count, butterfly_size])
-            imag = tf.reshape(imag, [self.samples, butterfly_count, butterfly_size])
+            real = tf.reshape(real, [self.batch_size, butterfly_count, butterfly_size])
+            imag = tf.reshape(imag, [self.batch_size, butterfly_count, butterfly_size])
 
             # Perform butterfly operations for the current stage
             real, imag = self.butterfly(real, imag, stage)
 
         # Reshape the parts back to their original shape
-        real = tf.reshape(real, [self.samples, self.size])
-        imag = tf.reshape(imag, [self.samples, self.size])
+        real = tf.reshape(real, [self.batch_size, self.fft_size])
+        imag = tf.reshape(imag, [self.batch_size, self.fft_size])
 
         # Combine the complex parts to return the original shape, with the FFT applied 
         return tf.stack([real, imag], axis=2)
@@ -220,7 +218,7 @@ class FFT:
         """
         # Create a trace of the function directly
         concrete_func = self.compute.get_concrete_function(
-            tf.TensorSpec(shape=(self.samples, self.size, 2), dtype=tf.float32)
+            tf.TensorSpec(shape=(self.batch_size, self.fft_size, 2), dtype=tf.float32)
         )
         return concrete_func
 
@@ -232,7 +230,7 @@ class FFT:
             Generator[tf.Tensor, None, None]: A generator yielding random tensors.
         """
         for _ in range(500):
-            yield [tf.random.uniform(shape=[self.samples, self.size, 2], minval=-1, maxval=1, dtype=tf.float32)]
+            yield [tf.random.uniform(shape=[self.batch_size, self.fft_size, 2], minval=-1, maxval=1, dtype=tf.float32)]
 
     def export_model(self, model_name: str) -> None:
         """
@@ -285,9 +283,9 @@ def parse_args() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments.
     """
     parser = argparse.ArgumentParser(description="Build and compile an FFT (Fast Fourier Transform) TensorFlow Lite model optimized for the Coral Edge TPU.")
-    parser.add_argument("size", type=int, help=" The size of the FFT, which must be a power of 2.")
-    parser.add_argument("samples", type=int, help="The number of samples in the input tensor.")
-    parser.add_argument("name", type=str, help="Name of the created TensorFlow Lite model.")
+    parser.add_argument("-s", "--fft_size", type=int, required=True, help="Size of the FFT (must be a power of 2).")
+    parser.add_argument("-b", "--batch_size", type=int, required=True, help="Number of FFTs to compute per batch.")
+    parser.add_argument("-n", "--name", type=str, required=True, help="Name of the created TensorFlow Lite model.")
     parser.add_argument("--outdir", type=str, default=None, help="Location to save the output model. Default is current directory.")
 
     return parser.parse_args()
@@ -303,7 +301,7 @@ def main() -> None:
         os.chdir(args.outdir)
 
     # Create a FFT instance and export the TensorFlow Lite model
-    fft_model = FFT(args.size, args.samples)
+    fft_model = FFT(args.fft_size, args.batch_size)
     fft_model.export_model(args.name)
 
 if __name__ == "__main__":

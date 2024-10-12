@@ -40,16 +40,16 @@ Use the `-j$(nproc)` option to use multiple processing units and speed up the bu
 
 ## Usage
 ```bash
-./coral -f <fft_size> -s <samples> -o <output_file> [options]
+./coral -s <fft_size> -b <batch_size> -o <output_file> [options]
 ```
 Required arguments:
-- `-f <fft_size>`       FFT size (must be a power of 2).
-- `-s <samples>`        Number of samples to batch process.*
+- `-s <fft_size>`       Size of the FFT (must be a power of 2).
+- `-b <batch_size>`     Number of FFTs to compute per batch.*
 - `-o <output_file>`    File to store the processed samples.
 
 Optional arguments:
-- `-n <num_output_samples>`  Number of output samples (default: run indefinitely).
-- `-d <samples_file>`        File to store the raw SDR samples.
-- `-m <model_script>`        Python script used for model creation (default: 'fft_model.py').
+- `-i <iterations>`     Number of batches to process (default: run indefinitely).
+- `-d <samples_file>`   File to store the raw SDR samples.
+- `-m <model_script>`   Python script used for model creation (default: 'fft_model.py').
 
-*`2 * fft_size * samples` bytes are read from the SDR per callback. This must be a multiple of 256, and it's recommended to use multiples of 16,384 (USB URB size).
+*`2 * fft_size * batch_size` bytes are read from the SDR per callback. This must be a multiple of 512, and it's recommended to use multiples of 16,384 (USB URB size).

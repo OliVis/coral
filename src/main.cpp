@@ -22,10 +22,10 @@ const std::string MODEL_SUFFIX = "_edgetpu.tflite";
 struct ProgramProperties {
     size_t read_size;
     int fft_size;
-    int samples;
+    int batch_size;
     std::string model_script;
     std::string output_file;
-    int output_samples;
+    int iterations;
     std::string samples_file;
 };
 
@@ -73,8 +73,8 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const Progr
         sfs.open(properties.samples_file, std::ios::binary);
     }
 
-    int samples_written = 0;
-    while (properties.output_samples == -1 || samples_written < properties.output_samples) {
+    int iter_count = 0;
+    while (properties.iterations == -1 || iter_count < properties.iterations) {
         // Retrieve data from the queue when available
         queue.wait_dequeue(input_data);
 
@@ -112,7 +112,7 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const Progr
         std::chrono::duration<double> elapsed_batch = end_batch - start_batch;
         std::cout << std::fixed << "> " << elapsed_batch.count() << std::endl;
 
-        samples_written += properties.samples;
+        iter_count++;
     }
     // Clean up
     delete[] output_data;
@@ -123,17 +123,17 @@ void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const Progr
 }
 
 void usage(const char* program_name) {
-    std::cerr << "Usage: " << program_name << " -f <fft_size> -s <samples> -o <output_file> [options]\n\n"
+    std::cerr << "Usage: " << program_name << " -s <fft_size> -b <batch_size> -o <output_file> [options]\n\n"
               << "Required arguments:\n"
-              << "  -f <fft_size>       FFT size (must be a power of 2).\n"
-              << "  -s <samples>        Number of samples to batch process (*).\n"
+              << "  -s <fft_size>       Size of the FFT (must be a power of 2).\n"
+              << "  -b <batch_size>     Number of FFTs to compute per batch.*\n"
               << "  -o <output_file>    File to store the processed samples.\n\n"
               << "Optional arguments:\n"
-              << "  -n <num_output_samples>  Number of output samples (default: run indefinitely).\n"
-              << "  -d <samples_file>        File to store the raw SDR samples.\n"
-              << "  -m <model_script>        Python script used for model creation (default: 'fft_model.py').\n\n"
-              << "(*) '2 * fft_size * samples' bytes are read from the SDR per callback.\n"
-              << "    This must be a multiple of 256, and it's recommended to use multiples of 16,384 (USB URB size)."
+              << "  -i <iterations>     Number of batches to process (default: run indefinitely).\n"
+              << "  -d <samples_file>   File to store the raw SDR samples.\n"
+              << "  -m <model_script>   Python script used for model creation (default: 'fft_model.py').\n\n"
+              << "(*) '2 * fft_size * batch_size' bytes are read from the SDR per callback.\n"
+              << "    This must be a multiple of 512, and it's recommended to use multiples of 16,384 (USB URB size)."
               << std::endl;
 }
 
@@ -142,22 +142,22 @@ int main(int argc, char* argv[]) {
 
     // Default values for optional arguments
     properties.model_script = "fft_model.py";
-    properties.output_samples = -1;
+    properties.iterations = -1;
 
     char opt;
-    while ((opt = getopt(argc, argv, "f:s:o:n:d:m:")) != -1) {
+    while ((opt = getopt(argc, argv, "s:b:o:i:d:m:")) != -1) {
         switch (opt) {
-            case 'f':
+            case 's':
                 properties.fft_size = std::stoi(optarg);
                 break;
-            case 's':
-                properties.samples = std::stoi(optarg);
+            case 'b':
+                properties.batch_size = std::stoi(optarg);
                 break;
             case 'o':
                 properties.output_file = optarg;
                 break;
-            case 'n':
-                properties.output_samples = std::stoi(optarg);
+            case 'i':
+                properties.iterations = std::stoi(optarg);
                 break;
             case 'd':
                 properties.samples_file = optarg;
@@ -172,26 +172,26 @@ int main(int argc, char* argv[]) {
     }
 
     // Check if all required arguments are provided
-    if (properties.fft_size == 0 || properties.samples == 0 || properties.output_file.empty()) {
+    if (properties.fft_size == 0 || properties.batch_size == 0 || properties.output_file.empty()) {
         std::cerr << "Missing required arguments." << std::endl;
         usage(argv[0]);
         exit(-1);
     }
 
     // Calculate the USB read size
-    properties.read_size = 2 * properties.fft_size * properties.samples;
+    properties.read_size = 2 * properties.fft_size * properties.batch_size;
 
-    // Create a unique model name based on the FFT size and number of samples
-    const std::string model_name = "fft_model_" + std::to_string(properties.fft_size) + "_" + std::to_string(properties.samples);
+    // Create a unique model name based on the FFT size and the batch size
+    const std::string model_name = "fft_model_" + std::to_string(properties.fft_size) + "_" + std::to_string(properties.batch_size);
 
     // Check if the EdgeTPU TensorFlow Lite model exists
     if (!std::filesystem::exists(model_name + MODEL_SUFFIX)) {
         // Create command to execute Python script for model creation
         std::stringstream command;
         command << "python3 " << properties.model_script  // The script to create the model
-                << " " << properties.fft_size             // Size of the FFT
-                << " " << properties.samples              // Number of samples
-                << " " << model_name;                     // Name for the model to be created
+                << " -s " << properties.fft_size          // Size of the FFT
+                << " -b " << properties.batch_size        // Number of FFTs per batch
+                << " -n " << model_name;                  // Name for the model to be created
         if (std::system(command.str().c_str()) < 0)
             throw std::runtime_error("Error: Failed to build model.");
     }
