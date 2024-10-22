@@ -49,6 +49,9 @@ Required arguments:
 
 Optional arguments:
 - `-i <iterations>`     Number of batches to process (default: run indefinitely).
+- `-r <sample_rate>`    Sample rate of the SDR in Hz (default: 2,040,000Hz).
+- `-f <frequency>`      Center frequency of the SDR in Hz (default: 80,000,000Hz).
+- `-g <gain>`           Gain value of the SDR (default: automatic).
 - `-d <samples_file>`   File to store the raw SDR samples.
 - `-m <model_script>`   Python script used for model creation (default: 'fft_model.py').
 

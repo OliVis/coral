@@ -18,14 +18,11 @@ using CircularBuffer = moodycamel::BlockingReaderWriterCircularBuffer<std::vecto
 
 const std::string MODEL_SUFFIX = "_edgetpu.tflite";
 
-// Struct to hold program properties
-struct ProgramProperties {
+// Struct to hold the properties for the processing thread
+struct ProcessProperties {
     size_t read_size;
-    int fft_size;
-    int batch_size;
-    std::string model_script;
-    std::string output_file;
     int iterations;
+    std::string output_file;
     std::string samples_file;
 };
 
@@ -49,7 +46,7 @@ void callback(uint8_t* buf, uint32_t len, void* ctx) {
     }
 }
 
-void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const ProgramProperties properties) {
+void process(EdgeTPUInterpreter& interpreter, CircularBuffer& queue, const ProcessProperties properties) {
     // Input tensor info
     const QuantizationParams input_quant = interpreter.input_tensor_info().quantization;
     int8_t* input_tensor = interpreter.input_tensor_info().data_ptr;
@@ -130,6 +127,9 @@ void usage(const char* program_name) {
               << "  -o <output_file>    File to store the processed samples.\n\n"
               << "Optional arguments:\n"
               << "  -i <iterations>     Number of batches to process (default: run indefinitely).\n"
+              << "  -r <sample_rate>    Sample rate of the SDR in Hz (default: 2,040,000Hz).\n"
+              << "  -f <frequency>      Center frequency of the SDR in Hz (default: 80,000,000Hz).\n"
+              << "  -g <gain>           Gain value of the SDR (default: automatic).\n"
               << "  -d <samples_file>   File to store the raw SDR samples.\n"
               << "  -m <model_script>   Python script used for model creation (default: 'fft_model.py').\n\n"
               << "(*) '2 * fft_size * batch_size' bytes are read from the SDR per callback.\n"
@@ -138,20 +138,30 @@ void usage(const char* program_name) {
 }
 
 int main(int argc, char* argv[]) {
-    ProgramProperties properties;
+    ProcessProperties properties;
+    properties.iterations = -1; // Default to run indefinitely
 
-    // Default values for optional arguments
-    properties.model_script = "fft_model.py";
-    properties.iterations = -1;
+    // Required arguments
+    int fft_size = 0;   // Size of the FFT
+    int batch_size = 0; // Number of FFTs to compute per batch
+
+    // Default RTL-SDR settings
+    int sample_rate = 2'040'000; // Default sample rate (2.04 MHz)
+    int frequency = 80'000'000;  // Default center frequency (80 MHz)
+    float gain = -1;             // Default gain (automatic if set to -1)
+
+    // Optional arguments
+    std::string model_script = "fft_model.py"; // Default script for the FFT model creation
+    std::string samples_file;                  // Optional file to store the raw SDR samples
 
     char opt;
-    while ((opt = getopt(argc, argv, "s:b:o:i:d:m:")) != -1) {
+    while ((opt = getopt(argc, argv, "s:b:o:i:r:f:g:d:m:")) != -1) {
         switch (opt) {
             case 's':
-                properties.fft_size = std::stoi(optarg);
+                fft_size = std::stoi(optarg);
                 break;
             case 'b':
-                properties.batch_size = std::stoi(optarg);
+                batch_size = std::stoi(optarg);
                 break;
             case 'o':
                 properties.output_file = optarg;
@@ -159,11 +169,20 @@ int main(int argc, char* argv[]) {
             case 'i':
                 properties.iterations = std::stoi(optarg);
                 break;
+            case 'r':
+                sample_rate = std::stoi(optarg);
+                break;
+            case 'f':
+                frequency = std::stoi(optarg);
+                break;
+            case 'g':
+                gain = std::stof(optarg);
+                break;
             case 'd':
                 properties.samples_file = optarg;
                 break;
             case 'm':
-                properties.model_script = optarg;
+                model_script = optarg;
                 break;
             default:
                 usage(argv[0]);
@@ -172,26 +191,26 @@ int main(int argc, char* argv[]) {
     }
 
     // Check if all required arguments are provided
-    if (properties.fft_size == 0 || properties.batch_size == 0 || properties.output_file.empty()) {
+    if (fft_size == 0 || batch_size == 0 || properties.output_file.empty()) {
         std::cerr << "Missing required arguments." << std::endl;
         usage(argv[0]);
         exit(-1);
     }
 
     // Calculate the USB read size
-    properties.read_size = 2 * properties.fft_size * properties.batch_size;
+    properties.read_size = 2 * fft_size * batch_size;
 
     // Create a unique model name based on the FFT size and the batch size
-    const std::string model_name = "fft_model_" + std::to_string(properties.fft_size) + "_" + std::to_string(properties.batch_size);
+    const std::string model_name = "fft_model_" + std::to_string(fft_size) + "_" + std::to_string(batch_size);
 
     // Check if the EdgeTPU TensorFlow Lite model exists
     if (!std::filesystem::exists(model_name + MODEL_SUFFIX)) {
         // Create command to execute Python script for model creation
         std::stringstream command;
-        command << "python3 " << properties.model_script  // The script to create the model
-                << " -s " << properties.fft_size          // Size of the FFT
-                << " -b " << properties.batch_size        // Number of FFTs per batch
-                << " -n " << model_name;                  // Name for the model to be created
+        command << "python3 " << model_script  // The script to create the model
+                << " -s " << fft_size          // Size of the FFT
+                << " -b " << batch_size        // Number of FFTs per batch
+                << " -n " << model_name;       // Name for the model to be created
         if (std::system(command.str().c_str()) < 0)
             throw std::runtime_error("Error: Failed to build model.");
     }
@@ -209,9 +228,13 @@ int main(int argc, char* argv[]) {
 
     // Configure RTL-SDR settings
     RtlSdr sdr;
-    sdr.set_sample_rate(2'040'000);  // 2.04MHz
-    sdr.set_center_freq(80'000'000); // 80Mhz
-    sdr.set_gain(6.0);               // 6dB
+    sdr.set_sample_rate(sample_rate);
+    sdr.set_center_freq(frequency);
+    if (gain < 0) {
+        sdr.set_auto_gain();
+    } else {
+        sdr.set_gain(gain);
+    }
 
     // Start a thread to read data asynchronously from RTL-SDR
     std::thread sdr_thread([&sdr, &queue, &properties]() {
