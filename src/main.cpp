@@ -42,7 +42,7 @@ void callback(uint8_t* buf, uint32_t len, void* ctx) {
 
     // Place the data in the queue
     if (!queue->try_enqueue(std::move(data))) {
-        std::cerr << "! Queue full, sample dropped!" << std::endl;
+        std::cout << "! Queue full, sample dropped" << std::endl;
     }
 }
 

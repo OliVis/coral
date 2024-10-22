@@ -1,6 +1,7 @@
 import numpy as np
 import subprocess
 import argparse
+import re
 
 class CoralArgs:
     """Encapsulates arguments for the Coral program."""
@@ -55,11 +56,26 @@ def accuracy(coral_args):
     print(f"Min: {min_diff:.2f}%")
     print(f"Max: {max_diff:.2f}%")
 
-def performance(coral_args):
+def performance(output):
     """
-    Placeholder for performance analysis functionality.
+    Measures the processing times and counts the number of dropped samples.
     """
-    print("Performance functionality is not implemented yet.")
+    # Count the number of dropped samples using the '!' identifier
+    dropped_count = output.count("!")
+
+    # Extract all the input times and output times from the output
+    input_times = np.array([float(match) for match in re.findall(r"< (\d+\.\d+)", output)])
+    output_times = np.array([float(match) for match in re.findall(r"> (\d+\.\d+)", output)])
+
+    # Calculate the average times
+    avg_input = np.mean(input_times)
+    avg_output = np.mean(output_times)
+
+    # Display the results
+    print("\nPerformance statistics:")
+    print(f"Avg input time:  {avg_input:.4f}s")
+    print(f"Avg output time: {avg_output:.4f}s")
+    print(f"Number samples:  {dropped_count}")
 
 def main():
     # Parse the commandline arguments for the test script
@@ -84,9 +100,12 @@ def main():
     if args.test_type == "accuracy":
         command.extend(["-d", "samples.dat"])
 
-    # Run the external Coral program and generate the data
     try:
-        subprocess.run(command, check=True)
+        # Run the external Coral program and caputure the created data
+        result = subprocess.run(command, check=True, stdout=subprocess.PIPE, text=True)
+
+        # Store the stdout output
+        output = result.stdout
     except subprocess.CalledProcessError:
         print("\nError: Coral program execution failed.")
         exit(1)
@@ -98,7 +117,7 @@ def main():
     if args.test_type == "accuracy":
         accuracy(coral_args)
     else:
-        performance(coral_args)
+        performance(output)
 
 if __name__ == "__main__":
     main()
