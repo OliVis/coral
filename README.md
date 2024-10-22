@@ -39,6 +39,7 @@ make -j$(nproc)
 Use the `-j$(nproc)` option to use multiple processing units and speed up the build process.
 
 ## Usage
+
 ```bash
 ./coral -s <fft_size> -b <batch_size> -o <output_file> [options]
 ```
@@ -56,3 +57,16 @@ Optional arguments:
 - `-m <model_script>`   Python script used for model creation (default: 'fft_model.py').
 
 *`2 * fft_size * batch_size` bytes are read from the SDR per callback. This must be a multiple of 512, and it's recommended to use multiples of 16,384 (USB URB size).
+
+### Testing
+
+```bash
+./test.py {accuracy,performance} [coral_args]
+```
+Specify the type of test you want to perform. Use either:
+- `accuracy`    Compare the accuracy of the Coral's FFT implementation with NumPy's FFT.
+- `performance` Measure the processing times and count the number of dropped samples during execution.
+
+Any additional arguments are passed to the Coral program. Notably:
+- It is not necessary to provide an output file `-o` or a samples file `-d` as arguments, these will be handled automatically by the script.
+- Limiting the number of iterations `-i` is required to control the test duration.

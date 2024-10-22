@@ -207,10 +207,10 @@ int main(int argc, char* argv[]) {
     if (!std::filesystem::exists(model_name + MODEL_SUFFIX)) {
         // Create command to execute Python script for model creation
         std::stringstream command;
-        command << "python3 " << model_script  // The script to create the model
-                << " -s " << fft_size          // Size of the FFT
-                << " -b " << batch_size        // Number of FFTs per batch
-                << " -n " << model_name;       // Name for the model to be created
+        command << "./" << model_script  // The script to create the model
+                << " -s " << fft_size    // Size of the FFT
+                << " -b " << batch_size  // Number of FFTs per batch
+                << " -n " << model_name; // Name for the model to be created
         if (std::system(command.str().c_str()) < 0)
             throw std::runtime_error("Error: Failed to build model.");
     }
