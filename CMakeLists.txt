@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD 17)
 
 set(TENSORFLOW_VERSION v2.16.1)
 
+set(TFLITE_ENABLE_XNNPACK OFF)
+
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
@@ -51,6 +53,6 @@ target_link_libraries(coral PRIVATE
 
 target_compile_options(coral PRIVATE -Wall -Wextra)
 
-file(GLOB SCRIPTS ${CMAKE_SOURCE_DIR}/scripts/*.py)
+file(GLOB SCRIPTS ${CMAKE_SOURCE_DIR}/scripts/*)
 
 file(COPY ${SCRIPTS} DESTINATION ${CMAKE_BINARY_DIR})

@@ -19,7 +19,6 @@ EdgeTPUInterpreter::EdgeTPUInterpreter(const std::string model_path) {
 
     // Bind the context with the interpreter
     interpreter->SetExternalContext(kTfLiteEdgeTpuContext, edgetpu_context.get());
-    interpreter->SetNumThreads(1);
 
     if (interpreter->AllocateTensors() != kTfLiteOk) {
         throw std::runtime_error("Error: Failed to allocate tensors.");

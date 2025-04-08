@@ -43,8 +43,12 @@ def accuracy(coral_args):
     # Perform FFT on the samples array
     samples_array = np.fft.fft(samples_array)
 
+    # Transform to decibels
+    output_array = 20 * np.log10(output_array + 1e-12)
+    samples_array = 20 * np.log10(samples_array + 1e-12)
+
     # Compute the relative difference between the arrays
-    difference = np.abs(output_array - samples_array) / np.abs(samples_array) * 100
+    difference = np.abs(output_array - samples_array)
 
     # Calculate average, min, and max differences
     avg_diff = np.mean(difference)
@@ -52,10 +56,10 @@ def accuracy(coral_args):
     min_diff = np.min(difference)
 
     # Print the accuracy results
-    print("\nAccuracy differences:")
-    print(f"Avg: {avg_diff:.2f}%")
-    print(f"Min: {min_diff:.2f}%")
-    print(f"Max: {max_diff:.2f}%")
+    print("Accuracy differences:")
+    print(f"Avg: {avg_diff:.2f}")
+    print(f"Min: {min_diff:.2f}")
+    print(f"Max: {max_diff:.2f}")
 
 def performance(output):
     """
@@ -73,7 +77,7 @@ def performance(output):
     avg_output = np.mean(output_times)
 
     # Display the results
-    print("\nPerformance statistics:")
+    print("Performance statistics:")
     print(f"Avg input time:  {avg_input:.4f}s")
     print(f"Avg output time: {avg_output:.4f}s")
     print(f"Number samples:  {dropped_count}")
