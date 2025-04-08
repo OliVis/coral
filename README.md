@@ -1,6 +1,6 @@
 # Signal Processing with Coral Edge TPU 
 
-This project uses the Coral Edge TPU and TensorFlow Lite to perform signal processing functions, specifically the Fast Fourier Transform (FFT), on the Coral Edge TPU device. By leveraging the power of the Edge TPU, we aim to accelerate these computations for real-time or high-performance signal processing tasks.
+This repository is part of a research project that aims to use the Coral Edge TPU and TensorFlow Lite to perform signal processing functions, specifically the Fast Fourier Transform (FFT), on the Coral Edge TPU device. By leveraging the power of the Edge TPU, we aim to accelerate these computations for real-time or high-performance signal processing tasks.
 
 ## Getting Started
 
@@ -70,3 +70,7 @@ Specify the type of test you want to perform. Use either:
 Any additional arguments are passed to the Coral program. Notably:
 - It is not necessary to provide an output file `-o` or a samples file `-d` as arguments, these will be handled automatically by the script.
 - Limiting the number of iterations `-i` is required to control the test duration.
+
+#### Additional notes
+- Check out the `gpu` branch to run the identical program on the GPU rather than the Edge TPU, to compare hardware.
+- Use `run_tests.sh` to automatically perform tests on a range of FFT sizes.
