@@ -16,7 +16,7 @@
 // Type alias for the circular buffer that holds the data
 using CircularBuffer = moodycamel::BlockingReaderWriterCircularBuffer<std::vector<uint8_t>>;
 
-const std::string MODEL_SUFFIX = "_edgetpu.tflite";
+const std::string MODEL_SUFFIX = ".tflite";
 
 // Struct to hold the properties for the processing thread
 struct ProcessProperties {

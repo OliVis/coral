@@ -260,21 +260,10 @@ class FFT:
         # Save the converted TensorFlow Lite model
         with open(file_name, "wb") as file:
             file.write(tflite_model)
-        print(f"Model saved to {file_name}, starting EdgeTPU compilation.", file=sys.stderr)
 
-        # Compile the TensorFlow Lite model for the Coral Edge TPU. 
-        # The '-s' flag generates a summary of the compilation.
-        result = subprocess.run(["edgetpu_compiler", "-s", file_name],
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT,
-                                text=True)
+        print(f"Model saved to {file_name}.", file=sys.stderr)
 
-        # Print the captured output to stderr
-        print(result.stdout, file=sys.stderr)
-
-        # Verify the compilation process. A non-zero return code indicates an error.
-        if result.returncode != 0:
-            raise RuntimeError("Compilation for Edge TPU failed.")
+        # Skip the EdgeTPU model compilation step
 
 def parse_args() -> argparse.Namespace:
     """

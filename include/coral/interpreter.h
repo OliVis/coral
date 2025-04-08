@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <vector>
 #include <memory>
-#include <edgetpu.h>
 #include "tensorflow/lite/interpreter.h"
+#include "tensorflow/lite/delegates/gpu/delegate.h"
 
 struct QuantizationParams {
     float scale;
@@ -55,7 +55,7 @@ public:
     const TensorInfo& output_tensor_info() const;
 
 private:
-    std::shared_ptr<edgetpu::EdgeTpuContext> edgetpu_context;
+    TfLiteDelegate* gpu_delegate;
     std::unique_ptr<tflite::Interpreter> interpreter;
 
     TensorInfo input_tensor_info_;

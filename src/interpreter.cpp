@@ -5,20 +5,17 @@
 #include "tensorflow/lite/model.h"
 
 EdgeTPUInterpreter::EdgeTPUInterpreter(const std::string model_path) {
-    // Load the compiled Edge TPU model as a FlatBufferModel
+    // Load the model as a FlatBufferModel
     std::unique_ptr<tflite::FlatBufferModel> model =
         tflite::FlatBufferModel::BuildFromFile(model_path.c_str());
 
-    // Create the EdgeTpuContext object
-    edgetpu_context = edgetpu::EdgeTpuManager::GetSingleton()->OpenDevice();
+    gpu_delegate = TfLiteGpuDelegateV2Create(nullptr);
 
-    // Build the interpreter with Edge TPU custom op resolver
+    // Build the interpreter with the gpu delegate
     tflite::ops::builtin::BuiltinOpResolver resolver;
-    resolver.AddCustom(edgetpu::kCustomOp, edgetpu::RegisterCustomOp());
-    tflite::InterpreterBuilder(*model, resolver)(&interpreter);
-
-    // Bind the context with the interpreter
-    interpreter->SetExternalContext(kTfLiteEdgeTpuContext, edgetpu_context.get());
+    tflite::InterpreterBuilder builder(*model, resolver);
+    builder.AddDelegate(gpu_delegate);
+    builder(&interpreter);
 
     if (interpreter->AllocateTensors() != kTfLiteOk) {
         throw std::runtime_error("Error: Failed to allocate tensors.");
@@ -33,8 +30,8 @@ EdgeTPUInterpreter::~EdgeTPUInterpreter() {
     // Releases interpreter instance to free up resources associated with this custom op
     interpreter.reset();
 
-    // Closes the Edge TPU
-    edgetpu_context.reset();
+    // Closes the GPU
+    TfLiteGpuDelegateV2Delete(gpu_delegate);
 }
 
 TfLiteStatus EdgeTPUInterpreter::invoke() {
